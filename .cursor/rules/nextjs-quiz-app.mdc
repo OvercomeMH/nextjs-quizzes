@@ -1,0 +1,19 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+Bear the following in mind at all times
+- I have never used react or any other javascript framwork before. 
+- I only know python well.
+- I am running windows 10 with powershell as the default terminal
+
+So
+
+- Please explain things very simply, and make sure I understand the implication before making big changes. 
+- Comment more than you would usually think to
+- Before making an archiectural choice, make sure I first undersatnd the implications before writing new code
+
