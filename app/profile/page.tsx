@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,26 +11,165 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 
+interface UserProfile {
+  name: string
+  email: string
+  stats: {
+    quizzesTaken: number
+    averageScore: number
+    totalPoints: number
+    rank: string
+  }
+  settings: {
+    emailNotifications: boolean
+    publicProfile: boolean
+  }
+}
+
 export default function ProfilePage() {
-  const [name, setName] = useState("John Doe")
-  const [email, setEmail] = useState("john.doe@example.com")
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [name, setName] = useState<string | undefined>(undefined)
+  const [email, setEmail] = useState<string | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
+  const [emailNotifications, setEmailNotifications] = useState<boolean | undefined>(undefined)
+  const [publicProfile, setPublicProfile] = useState<boolean | undefined>(undefined)
+  const router = useRouter()
   
-  // Mock user data
-  const userStats = {
-    quizzesTaken: 12,
-    averageScore: 75,
-    totalPoints: 980,
-    rank: "Quiz Enthusiast"
+  // Fetch profile data when component mounts
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch('/api/user/profile')
+        if (!response.ok) {
+          throw new Error('Failed to fetch profile')
+        }
+        
+        const data = await response.json()
+        setProfile(data)
+        
+        // Only set state if it hasn't been set or is different from current values
+        if (name === undefined || name !== data.name) setName(data.name)
+        if (email === undefined || email !== data.email) setEmail(data.email)
+        if (emailNotifications === undefined || emailNotifications !== data.settings.emailNotifications) 
+          setEmailNotifications(data.settings.emailNotifications)
+        if (publicProfile === undefined || publicProfile !== data.settings.publicProfile) 
+          setPublicProfile(data.settings.publicProfile)
+      } catch (error) {
+        console.error('Error fetching profile:', error)
+      } finally {
+        setIsLoadingProfile(false)
+      }
+    }
+    
+    fetchProfile()
+  }, []) // We still want this to run only on mount
+
+  // Handle logout - simplified for testing
+  const handleLogout = () => {
+    // For now, just redirect to login
+    router.push('/login')
+  }
+
+  // Handle settings changes
+  const updateSettings = async (setting: string, value: boolean) => {
+    try {
+      // Create an object with just the changed setting
+      const updatedSettings = { [setting]: value }
+      
+      // Send to the settings API
+      const response = await fetch('/api/user/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedSettings),
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to update settings')
+      }
+      
+      // Get the response data
+      const data = await response.json()
+      
+      if (data.success) {
+        // Update both the profile data and individual state variables
+        if (profile) {
+          // Update the profile state
+          setProfile({
+            ...profile,
+            settings: data.settings
+          })
+          
+          // Also update the individual state variables
+          setEmailNotifications(data.settings.emailNotifications)
+          setPublicProfile(data.settings.publicProfile)
+        }
+      }
+    } catch (error) {
+      console.error('Error updating settings:', error)
+      alert('Failed to update settings. Please try again.')
+    }
+  }
+  
+  // Handle email notifications toggle
+  const handleEmailNotificationsChange = (checked: boolean) => {
+    setEmailNotifications(checked)
+    updateSettings('emailNotifications', checked)
+  }
+  
+  // Handle public profile toggle
+  const handlePublicProfileChange = (checked: boolean) => {
+    setPublicProfile(checked)
+    updateSettings('publicProfile', checked)
   }
 
   const handleUpdateProfile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
-    // Simulate API call delay
-    setTimeout(() => {
+    
+    try {
+      // Send data to the API
+      const response = await fetch('/api/user/profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          settings: {
+            emailNotifications,
+            publicProfile
+          }
+        }),
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to update profile')
+      }
+      
+      // Get the updated profile data
+      const updatedProfile = await response.json()
+      setProfile(updatedProfile)
+      
+      // Show success message
+      alert('Profile updated successfully!')
+    } catch (error) {
+      console.error('Error updating profile:', error)
+      alert('Failed to update profile. Please try again.')
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
+  }
+
+  if (isLoadingProfile) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center">
+        <div className="text-xl">Loading profile...</div>
+      </div>
+    )
   }
 
   return (
@@ -56,8 +196,8 @@ export default function ProfilePage() {
             </Link>
           </nav>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/">Logout</Link>
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              Logout
             </Button>
           </div>
         </div>
@@ -118,21 +258,21 @@ export default function ProfilePage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2 p-4 border rounded-lg">
                       <p className="text-sm text-muted-foreground">Quizzes Taken</p>
-                      <p className="text-2xl font-bold">{userStats.quizzesTaken}</p>
+                      <p className="text-2xl font-bold">{profile?.stats.quizzesTaken}</p>
                     </div>
                     <div className="space-y-2 p-4 border rounded-lg">
                       <p className="text-sm text-muted-foreground">Average Score</p>
-                      <p className="text-2xl font-bold">{userStats.averageScore}%</p>
+                      <p className="text-2xl font-bold">{profile?.stats.averageScore}%</p>
                     </div>
                     <div className="space-y-2 p-4 border rounded-lg">
                       <p className="text-sm text-muted-foreground">Total Points</p>
-                      <p className="text-2xl font-bold">{userStats.totalPoints}</p>
+                      <p className="text-2xl font-bold">{profile?.stats.totalPoints}</p>
                     </div>
                     <div className="space-y-2 p-4 border rounded-lg">
                       <p className="text-sm text-muted-foreground">Rank</p>
-                      <p className="text-2xl font-bold flex items-center gap-2">
-                        {userStats.rank} <Badge>Level 3</Badge>
-                      </p>
+                      <div className="text-2xl font-bold flex items-center gap-2">
+                        {profile?.stats.rank} <Badge>Level 3</Badge>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -151,14 +291,20 @@ export default function ProfilePage() {
                       <Label>Email Notifications</Label>
                       <p className="text-sm text-muted-foreground">Receive emails about new quizzes</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={emailNotifications} 
+                      onCheckedChange={handleEmailNotificationsChange}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label>Public Profile</Label>
                       <p className="text-sm text-muted-foreground">Allow others to see your quiz results</p>
                     </div>
-                    <Switch />
+                    <Switch 
+                      checked={publicProfile}
+                      onCheckedChange={handlePublicProfileChange}
+                    />
                   </div>
                 </CardContent>
                 <CardFooter>

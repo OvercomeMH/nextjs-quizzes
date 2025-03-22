@@ -2,26 +2,56 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import React from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { CheckCircle2, XCircle } from "lucide-react"
 
-export default function QuizResultsPage({ params }) {
-  const searchParams = useSearchParams()
-  const score = Number.parseInt(searchParams.get("score") || "0")
-  const total = Number.parseInt(searchParams.get("total") || "1")
-  const percentage = Math.round((score / total) * 100)
+// Define types
+interface QuizOption {
+  id: string;
+  text: string;
+}
 
-  const [quiz, setQuiz] = useState(null)
-  const [loading, setLoading] = useState(true)
+interface QuizQuestion {
+  id: number;
+  text: string;
+  options: QuizOption[];
+  correctAnswer: string;
+}
+
+interface Quiz {
+  id: string;
+  title: string;
+  description: string;
+  userAnswers: string[];
+  questions: QuizQuestion[];
+}
+
+interface PageParams {
+  id: string;
+}
+
+export default function QuizResultsPage({ params }: { params: Promise<PageParams> }) {
+  // Unwrap params using React.use()
+  const unwrappedParams = React.use(params);
+  const quizId = unwrappedParams.id;
+  
+  const searchParams = useSearchParams();
+  const score = Number.parseInt(searchParams.get("score") || "0");
+  const total = Number.parseInt(searchParams.get("total") || "1");
+  const percentage = Math.round((score / total) * 100);
+
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // In a real app, you would fetch the quiz data and user's answers from an API
     setTimeout(() => {
       setQuiz({
-        id: params.id,
+        id: quizId,
         title: "Introduction to JavaScript",
         description: "Test your knowledge of JavaScript basics",
         userAnswers: ["c", "b", "a", "c", "c"],
@@ -82,25 +112,33 @@ export default function QuizResultsPage({ params }) {
             correctAnswer: "c",
           },
         ],
-      })
-      setLoading(false)
-    }, 1000)
-  }, [params.id])
+      });
+      setLoading(false);
+    }, 1000);
+  }, [quizId]);
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">Loading results...</div>
       </div>
-    )
+    );
   }
 
-  const getResultMessage = (percentage) => {
-    if (percentage >= 90) return "Excellent! You've mastered this topic."
-    if (percentage >= 70) return "Good job! You have a solid understanding."
-    if (percentage >= 50) return "Not bad! But there's room for improvement."
-    return "Keep studying! You'll get better with practice."
+  if (!quiz) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">Quiz results not found</div>
+      </div>
+    );
   }
+
+  const getResultMessage = (percentage: number): string => {
+    if (percentage >= 90) return "Excellent! You've mastered this topic.";
+    if (percentage >= 70) return "Good job! You have a solid understanding.";
+    if (percentage >= 50) return "Not bad! But there's room for improvement.";
+    return "Keep studying! You'll get better with practice.";
+  };
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -137,7 +175,7 @@ export default function QuizResultsPage({ params }) {
             </CardContent>
             <CardFooter className="flex justify-center gap-4">
               <Button asChild>
-                <Link href={`/quizzes/${params.id}`}>Retake Quiz</Link>
+                <Link href={`/quizzes/${quizId}`}>Retake Quiz</Link>
               </Button>
               <Button variant="outline" asChild>
                 <Link href="/dashboard">Back to Dashboard</Link>

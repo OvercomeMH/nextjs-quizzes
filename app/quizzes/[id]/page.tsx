@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import React from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -11,20 +12,44 @@ import { Progress } from "@/components/ui/progress"
 import { AlertCircle, Clock } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
-export default function QuizPage({ params }) {
-  const router = useRouter()
-  const [quiz, setQuiz] = useState(null)
-  const [currentQuestion, setCurrentQuestion] = useState(0)
-  const [answers, setAnswers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [timeLeft, setTimeLeft] = useState(600) // 10 minutes in seconds
-  const [isSubmitting, setIsSubmitting] = useState(false)
+// Define types
+interface QuizQuestion {
+  id: number;
+  text: string;
+  options: { id: string; text: string }[];
+  correctAnswer: string;
+}
+
+interface Quiz {
+  id: string;
+  title: string;
+  description: string;
+  questions: QuizQuestion[];
+  timeLimit: number;
+}
+
+interface PageParams {
+  id: string;
+}
+
+export default function QuizPage({ params }: { params: Promise<PageParams> }) {
+  // Unwrap params using React.use()
+  const unwrappedParams = React.use(params);
+  const quizId = unwrappedParams.id;
+  
+  const router = useRouter();
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [timeLeft, setTimeLeft] = useState(600); // 10 minutes in seconds
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     // In a real app, you would fetch the quiz data from an API
     setTimeout(() => {
       setQuiz({
-        id: params.id,
+        id: quizId,
         title: "Introduction to JavaScript",
         description: "Test your knowledge of JavaScript basics",
         questions: [
@@ -84,81 +109,91 @@ export default function QuizPage({ params }) {
             correctAnswer: "c",
           },
         ],
-        timeLimit: 600, // 10 minutes in seconds
-      })
-      setAnswers(new Array(5).fill(null))
-      setLoading(false)
-    }, 1000)
-  }, [params.id])
+        timeLimit: 600,
+      });
+      setAnswers(new Array(5).fill(null));
+      setLoading(false);
+    }, 1000);
+  }, [quizId]);
 
   useEffect(() => {
-    if (!quiz) return
+    if (!quiz) return;
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          clearInterval(timer)
-          handleSubmit()
-          return 0
+          clearInterval(timer);
+          handleSubmit();
+          return 0;
         }
-        return prev - 1
-      })
-    }, 1000)
+        return prev - 1;
+      });
+    }, 1000);
 
-    return () => clearInterval(timer)
-  }, [quiz])
+    return () => clearInterval(timer);
+  }, [quiz]);
 
-  const handleAnswerChange = (value) => {
-    const newAnswers = [...answers]
-    newAnswers[currentQuestion] = value
-    setAnswers(newAnswers)
-  }
+  const handleAnswerChange = (value: string) => {
+    const newAnswers = [...answers];
+    newAnswers[currentQuestion] = value;
+    setAnswers(newAnswers);
+  };
 
   const handleNext = () => {
-    if (currentQuestion < quiz.questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1)
+    if (quiz && currentQuestion < quiz.questions.length - 1) {
+      setCurrentQuestion(currentQuestion + 1);
     }
-  }
+  };
 
   const handlePrevious = () => {
     if (currentQuestion > 0) {
-      setCurrentQuestion(currentQuestion - 1)
+      setCurrentQuestion(currentQuestion - 1);
     }
-  }
+  };
 
   const handleSubmit = () => {
-    setIsSubmitting(true)
+    if (!quiz) return;
+    
+    setIsSubmitting(true);
 
     // Calculate score
-    let score = 0
+    let score = 0;
     answers.forEach((answer, index) => {
       if (answer === quiz.questions[index].correctAnswer) {
-        score++
+        score++;
       }
-    })
+    });
 
     // In a real app, you would submit the answers to an API
     setTimeout(() => {
-      router.push(`/quizzes/${params.id}/results?score=${score}&total=${quiz.questions.length}`)
-    }, 1000)
-  }
+      router.push(`/quizzes/${quizId}/results?score=${score}&total=${quiz.questions.length}`);
+    }, 1000);
+  };
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs < 10 ? "0" : ""}${secs}`
-  }
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  };
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">Loading quiz...</div>
       </div>
-    )
+    );
   }
 
-  const question = quiz.questions[currentQuestion]
-  const progress = ((currentQuestion + 1) / quiz.questions.length) * 100
+  if (!quiz) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">Quiz not found</div>
+      </div>
+    );
+  }
+
+  const question = quiz.questions[currentQuestion];
+  const progress = ((currentQuestion + 1) / quiz.questions.length) * 100;
 
   return (
     <div className="flex min-h-screen flex-col">
