@@ -1,69 +1,71 @@
 import { NextResponse } from 'next/server'
-import { addUser, findUserByUsername } from '@/lib/users'
-
-const SESSION_COOKIE_NAME = 'quiz-master-session'
+import { supabase } from '@/lib/supabase'
 
 export async function POST(request: Request) {
   try {
     // Parse the request body
-    const { username, password, name, email } = await request.json()
+    const { email, password, username, fullName } = await request.json()
     
     // Validate required fields
-    if (!username || !password || !name || !email) {
+    if (!email || !password || !username) {
       return NextResponse.json(
-        { error: "All fields are required: username, password, name, email" },
+        { error: "Email, password, and username are required" },
         { status: 400 }
       )
     }
     
-    // Check if username already exists
-    const existingUser = await findUserByUsername(username)
-    if (existingUser) {
-      return NextResponse.json(
-        { error: "Username already exists" },
-        { status: 409 }
-      )
-    }
-    
-    // Create new user
-    const newUser = await addUser({
-      username,
-      password, // Note: In a real app, we would hash this
-      name,
+    // Register user with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
-      stats: {
-        quizzesTaken: 0,
-        averageScore: 0,
-        totalPoints: 0,
-        rank: "Beginner"
-      },
-      settings: {
-        emailNotifications: true,
-        publicProfile: true,
+      password,
+      options: {
+        data: {
+          username,
+          full_name: fullName || username
+        }
       }
     })
     
-    // Return user data (excluding password)
-    const { password: _, ...userWithoutPassword } = newUser
+    if (authError || !authData.user) {
+      console.error('Supabase auth registration error:', authError)
+      return NextResponse.json(
+        { error: authError?.message || "Registration failed" },
+        { status: 400 }
+      )
+    }
     
-    // Create response with cookie
-    const response = NextResponse.json({
+    // Now create an entry in our users table with the same ID
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .insert({
+        id: authData.user.id,
+        email: email,
+        username: username,
+        full_name: fullName || username,
+        // Default stats and settings
+        rank: 'Beginner',
+        email_notifications: true,
+        public_profile: true
+      })
+      .select()
+      .single()
+    
+    if (userError) {
+      console.error('Error creating user profile:', userError)
+      // We don't want to fail the registration if profile creation fails
+      // since the auth user was already created
+    }
+    
+    return NextResponse.json({
       success: true,
-      user: userWithoutPassword
+      message: "Registration successful! Please check your email to confirm your account.",
+      user: {
+        id: authData.user.id,
+        email: authData.user.email,
+        username,
+        fullName: fullName || username
+      }
     })
-    
-    // Set the session cookie
-    response.cookies.set({
-      name: SESSION_COOKIE_NAME,
-      value: newUser.id,
-      path: '/',
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-      sameSite: 'strict'
-    })
-    
-    return response
   } catch (error) {
     console.error('Registration error:', error)
     return NextResponse.json(

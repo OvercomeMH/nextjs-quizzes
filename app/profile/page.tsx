@@ -207,10 +207,11 @@ export default function ProfilePage() {
           <h1 className="text-3xl font-bold mb-6">Your Profile</h1>
           
           <Tabs defaultValue="info" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-8">
+            <TabsList className="grid w-full grid-cols-4 mb-8">
               <TabsTrigger value="info">Personal Info</TabsTrigger>
               <TabsTrigger value="stats">Statistics</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
+              <TabsTrigger value="admin">Admin</TabsTrigger>
             </TabsList>
             
             <TabsContent value="info" className="space-y-4">
@@ -312,6 +313,54 @@ export default function ProfilePage() {
                     <Link href="/login">Change Password</Link>
                   </Button>
                 </CardFooter>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="admin" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Admin Features</CardTitle>
+                  <CardDescription>Access administrative features and tools</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg">Quiz Management</CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0 pb-2">
+                        <p className="text-sm text-muted-foreground mb-2">Create, edit, and manage quizzes.</p>
+                      </CardContent>
+                      <CardFooter className="flex flex-col space-y-2 items-start pt-0">
+                        <Button variant="outline" className="w-full" asChild>
+                          <Link href="/admin/dashboard">Admin Dashboard</Link>
+                        </Button>
+                        <Button variant="outline" className="w-full" asChild>
+                          <Link href="/admin/quizzes/create">Create New Quiz</Link>
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg">Analytics</CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0 pb-2">
+                        <p className="text-sm text-muted-foreground mb-2">View quiz performance and user statistics.</p>
+                      </CardContent>
+                      <CardFooter className="flex flex-col space-y-2 items-start pt-0">
+                        <Button variant="outline" className="w-full" asChild>
+                          <Link href="/admin/dashboard">View Statistics</Link>
+                        </Button>
+                        {profile?.stats && profile.stats.quizzesTaken > 0 && (
+                          <Button variant="outline" className="w-full" asChild>
+                            <Link href="/admin/quizzes/quiz1/analytics">Sample Quiz Analytics</Link>
+                          </Button>
+                        )}
+                      </CardFooter>
+                    </Card>
+                  </div>
+                </CardContent>
               </Card>
             </TabsContent>
           </Tabs>

@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { supabase } from "@/lib/supabase"
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("")
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
@@ -22,12 +23,13 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
+      // Method 1: Using the API route we created
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ email, password }),
       })
 
       const data = await response.json()
@@ -36,11 +38,43 @@ export default function LoginPage() {
         throw new Error(data.error || "Login failed")
       }
 
-      // The cookie is set by the server automatically
+      // The cookie is set by Supabase automatically
       console.log("Login successful", data)
       
-      // Redirect to profile
-      router.push("/profile")
+      // Redirect to dashboard
+      router.push("/dashboard")
+      
+      // Force a refresh to update the auth state
+      router.refresh()
+    } catch (err: any) {
+      setError(err.message || "Something went wrong")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Alternative approach: Direct login with Supabase client
+  const handleDirectLogin = async () => {
+    setError("")
+    setLoading(true)
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+
+      if (error) {
+        throw error
+      }
+
+      console.log("Direct login successful", data)
+      
+      // Redirect to dashboard
+      router.push("/dashboard")
+      
+      // Force a refresh to update the auth state
+      router.refresh()
     } catch (err: any) {
       setError(err.message || "Something went wrong")
     } finally {
@@ -65,17 +99,17 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="mt-8 space-y-6">
           <div className="space-y-4">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                Username
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                Email
               </label>
               <Input
-                id="username"
-                name="username"
-                type="text"
+                id="email"
+                name="email"
+                type="email"
                 required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
                 className="mt-1"
               />
             </div>

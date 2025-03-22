@@ -62,6 +62,8 @@ export default function QuizPage({ params }: { params: Promise<PageParams> }) {
   const [error, setError] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(600); // Default to 10 minutes, will be updated from quiz data
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [startTime] = useState<Date>(new Date());
 
   useEffect(() => {
     // Fetch quiz data from API
@@ -135,10 +137,11 @@ export default function QuizPage({ params }: { params: Promise<PageParams> }) {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!quiz) return;
     
     setIsSubmitting(true);
+    setSubmitError(null);
 
     // Calculate score
     let score = 0;
@@ -148,13 +151,43 @@ export default function QuizPage({ params }: { params: Promise<PageParams> }) {
       }
     });
 
-    // Encode answers as URL parameter
-    const encodedAnswers = encodeURIComponent(JSON.stringify(answers));
-    
-    // In a real app, you would submit the answers to an API
-    setTimeout(() => {
+    // Calculate time spent in seconds
+    const endTime = new Date();
+    const timeSpent = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+
+    try {
+      // Submit quiz results to Supabase
+      const response = await fetch('/api/quizzes/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          quizId: quiz.id,
+          score: score,
+          totalPossible: quiz.metadata.totalPoints,
+          timeSpent: timeSpent,
+          answers: answers,
+          // userId would come from authentication in a real app
+          // For now, we'll allow anonymous submissions
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit quiz');
+      }
+
+      // Encode answers as URL parameter for results page
+      const encodedAnswers = encodeURIComponent(JSON.stringify(answers));
+      
+      // Navigate to results page
       router.push(`/quizzes/${quizId}/results?score=${score}&total=${quiz.metadata.totalPoints}&answers=${encodedAnswers}`);
-    }, 1000);
+    } catch (err) {
+      console.error("Error submitting quiz:", err);
+      setSubmitError('Failed to save your quiz results. Please try again.');
+      setIsSubmitting(false);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -255,6 +288,14 @@ export default function QuizPage({ params }: { params: Promise<PageParams> }) {
               )}
             </CardFooter>
           </Card>
+
+          {submitError && (
+            <Alert className="mb-6 border-red-200 text-red-800">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
+          )}
 
           <div className="grid grid-cols-5 gap-2">
             {quiz.questions.map((_, index) => (

@@ -1,52 +1,55 @@
 import { NextResponse } from 'next/server'
-import { authenticateUser } from '@/lib/users'
-
-const SESSION_COOKIE_NAME = 'quiz-master-session'
+import { supabase } from '@/lib/supabase'
+import { cookies } from 'next/headers'
 
 export async function POST(request: Request) {
   try {
     // Parse the request body
-    const { username, password } = await request.json()
+    const { email, password } = await request.json()
     
     // Validate inputs
-    if (!username || !password) {
+    if (!email || !password) {
       return NextResponse.json(
-        { error: "Username and password are required" },
+        { error: "Email and password are required" },
         { status: 400 }
       )
     }
     
-    // Authenticate the user
-    const user = await authenticateUser(username, password)
+    // Authenticate with Supabase
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    })
     
-    if (!user) {
+    if (error || !data.user) {
+      console.error('Supabase auth error:', error)
       return NextResponse.json(
-        { error: "Invalid username or password" },
+        { error: error?.message || "Invalid email or password" },
         { status: 401 }
       )
     }
     
-    // Return user data (excluding password)
-    const { password: _, ...userWithoutPassword } = user
+    // Get the user profile data from our users table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', data.user.id)
+      .single()
     
-    // Create response with cookie
-    const response = NextResponse.json({
+    if (userError) {
+      console.error('Error fetching user data:', userError)
+    }
+    
+    // Create response (cookies are automatically handled by Supabase client)
+    return NextResponse.json({
       success: true,
-      user: userWithoutPassword
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        username: data.user.user_metadata?.username || userData?.username,
+        full_name: data.user.user_metadata?.full_name || userData?.full_name
+      }
     })
-    
-    // Set the session cookie
-    response.cookies.set({
-      name: SESSION_COOKIE_NAME,
-      value: user.id,
-      path: '/',
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-      sameSite: 'strict'
-    })
-    
-    return response
   } catch (error) {
     console.error('Login error:', error)
     return NextResponse.json(

@@ -1,40 +1,41 @@
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { supabase } from '@/lib/supabase';
 import 'server-only';
 
 export async function GET() {
   try {
-    // Path to the quizzes directory
-    const quizzesDir = path.join(process.cwd(), 'data', 'quizzes');
+    // Query the quizzes table from Supabase
+    const { data, error } = await supabase
+      .from('quizzes')
+      .select('*')
+      .order('created_at', { ascending: false });
     
-    // Read all files in the quizzes directory
-    const files = await fs.readdir(quizzesDir);
+    if (error) {
+      console.error('Error fetching quizzes from Supabase:', error);
+      return NextResponse.json(
+        { error: "An error occurred while fetching quizzes" },
+        { status: 500 }
+      );
+    }
     
-    // Filter for .json files and read their contents
-    const quizFiles = files.filter(file => file.endsWith('.json'));
+    // Transform the data to match the format expected by the frontend
+    const quizzes = data.map(quiz => ({
+      id: quiz.id,
+      title: quiz.title,
+      description: quiz.description,
+      difficulty: quiz.difficulty,
+      timeLimit: quiz.time_limit,
+      totalQuestions: quiz.total_questions,
+      metadata: {
+        createdAt: quiz.created_at,
+        updatedAt: quiz.updated_at,
+        totalPoints: quiz.total_points,
+        averageRating: quiz.average_rating,
+        timesPlayed: quiz.times_played
+      }
+    }));
     
-    // Read and parse each quiz file
-    const quizzes = await Promise.all(
-      quizFiles.map(async (file) => {
-        const filePath = path.join(quizzesDir, file);
-        const fileContents = await fs.readFile(filePath, 'utf-8');
-        const quizData = JSON.parse(fileContents);
-        
-        // Return only the quiz metadata and basic info, not the questions
-        return {
-          id: quizData.id,
-          title: quizData.title,
-          description: quizData.description,
-          difficulty: quizData.difficulty,
-          timeLimit: quizData.timeLimit,
-          totalQuestions: quizData.questions.length,
-          metadata: quizData.metadata
-        };
-      })
-    );
-    
-    // Simulate a delay to mimic network latency
+    // Simulate a delay to mimic network latency (optional, can be removed)
     await new Promise(resolve => setTimeout(resolve, 300));
     
     // Return the list of quizzes
