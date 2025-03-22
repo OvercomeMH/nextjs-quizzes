@@ -1,0 +1,122 @@
+{
+  "id": "quiz1",
+  "title": "Basic Programming Concepts",
+  "description": "Test your knowledge of fundamental programming concepts",
+  "difficulty": "beginner", 
+  "timeLimit": 600,
+  "questions": [
+    {
+      "id": "q1",
+      "text": "What is a variable?",
+      "type": "multiple-choice",
+      "points": 10,
+      "options": [
+        {
+          "id": "a",
+          "text": "A container for storing data values"
+        },
+        {
+          "id": "b",
+          "text": "A mathematical equation"
+        },
+        {
+          "id": "c",
+          "text": "A type of loop"
+        },
+        {
+          "id": "d",
+          "text": "A function name"
+        }
+      ],
+      "correctAnswer": "a",
+      "explanation": "A variable is a named storage location for holding data that can be modified during program execution."
+    },
+    {
+      "id": "q2", 
+      "text": "Which of the following is a valid way to comment code in Python?",
+      "type": "multiple-choice",
+      "points": 10,
+      "options": [
+        {
+          "id": "a",
+          "text": "// This is a comment"
+        },
+        {
+          "id": "b",
+          "text": "/* This is a comment */"
+        },
+        {
+          "id": "c",
+          "text": "# This is a comment"
+        },
+        {
+          "id": "d",
+          "text": "--This is a comment"
+        }
+      ],
+      "correctAnswer": "c",
+      "explanation": "In Python, single-line comments start with the # symbol."
+    },
+    {
+      "id": "q3",
+      "text": "What is the purpose of a 'for' loop?",
+      "type": "multiple-choice", 
+      "points": 10,
+      "options": [
+        {
+          "id": "a",
+          "text": "To make decisions in code"
+        },
+        {
+          "id": "b",
+          "text": "To iterate over a sequence of elements"
+        },
+        {
+          "id": "c",
+          "text": "To define a function"
+        },
+        {
+          "id": "d",
+          "text": "To catch errors in code"
+        }
+      ],
+      "correctAnswer": "b",
+      "explanation": "A for loop is used to iterate over a sequence (like a list, tuple, or string) and execute a set of statements for each item in the sequence."
+    },
+    {
+      "id": "q4",
+      "text": "What does the 'return' statement do in a function?",
+      "type": "multiple-choice",
+      "points": 10,
+      "options": [
+        {
+          "id": "a",
+          "text": "Prints a value to the console"
+        },
+        {
+          "id": "b",
+          "text": "Ends the program immediately"
+        },
+        {
+          "id": "c",
+          "text": "Sends a value back to the caller of the function"
+        },
+        {
+          "id": "d",
+          "text": "Deletes a variable"
+        }
+      ],
+      "correctAnswer": "c",
+      "explanation": "The return statement exits a function and sends a value back to the code that called the function."
+    }
+  ],
+  "metadata": {
+    "createdAt": "2024-01-20T12:00:00Z",
+    "updatedAt": "2024-01-20T12:00:00Z",
+    "totalQuestions": 4,
+    "totalPoints": 40,
+    "averageRating": 4.5,
+    "timesPlayed": 0
+  }
+}
+

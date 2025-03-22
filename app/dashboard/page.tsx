@@ -8,54 +8,77 @@ import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 
+// Define interfaces for type safety
+interface Quiz {
+  id: string;
+  title: string;
+  description: string;
+  difficulty: string;
+  metadata: {
+    totalQuestions: number;
+    totalPoints: number;
+    timesPlayed: number;
+    averageRating: number;
+  };
+}
+
+interface CompletedQuiz {
+  id: string;
+  title: string;
+  score: number;
+  totalQuestions: number;
+  completedAt: string;
+}
+
 export default function UserDashboard() {
-  const [quizzes, setQuizzes] = useState([])
-  const [completedQuizzes, setCompletedQuizzes] = useState([])
+  const [quizzes, setQuizzes] = useState<Quiz[]>([])
+  const [completedQuizzes, setCompletedQuizzes] = useState<CompletedQuiz[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // In a real app, you would fetch this data from an API
-    setTimeout(() => {
-      setQuizzes([
-        {
-          id: 1,
-          title: "Introduction to JavaScript",
-          description: "Test your knowledge of JavaScript basics",
-          questions: 10,
-          difficulty: "Beginner",
-          category: "Programming",
-        },
-        {
-          id: 2,
-          title: "Advanced React Concepts",
-          description: "Challenge yourself with advanced React topics",
-          questions: 15,
-          difficulty: "Advanced",
-          category: "Programming",
-        },
-        {
-          id: 3,
-          title: "Data Structures and Algorithms",
-          description: "Test your knowledge of fundamental CS concepts",
-          questions: 20,
-          difficulty: "Intermediate",
-          category: "Computer Science",
-        },
-      ])
-
-      setCompletedQuizzes([
-        {
-          id: 4,
-          title: "HTML and CSS Basics",
-          score: 8,
-          totalQuestions: 10,
-          completedAt: "2023-05-15",
-        },
-      ])
-
-      setLoading(false)
-    }, 1000)
+    const fetchQuizzes = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/quizzes');
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch quizzes');
+        }
+        
+        const data = await response.json();
+        setQuizzes(data);
+        
+        // For now, we'll use hardcoded completed quizzes
+        // In a real app, you would fetch this from an API
+        setCompletedQuizzes([
+          {
+            id: "completed1",
+            title: "HTML and CSS Basics",
+            score: 8,
+            totalQuestions: 10,
+            completedAt: "2023-05-15",
+          },
+        ]);
+        
+        setLoading(false);
+      } catch (err) {
+        console.error("Error fetching quizzes:", err);
+        setError("Failed to load quizzes. Please try again later.");
+        setLoading(false);
+      }
+    };
+    
+    fetchQuizzes();
   }, [])
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center text-red-500">{error}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -157,9 +180,9 @@ export default function UserDashboard() {
                       </CardHeader>
                       <CardContent>
                         <div className="flex flex-wrap gap-2 mb-4">
-                          <Badge variant="outline">{quiz.category}</Badge>
                           <Badge variant="outline">{quiz.difficulty}</Badge>
-                          <Badge variant="outline">{quiz.questions} Questions</Badge>
+                          <Badge variant="outline">{quiz.metadata.totalQuestions} Questions</Badge>
+                          <Badge variant="outline">{quiz.metadata.totalPoints} Points</Badge>
                         </div>
                       </CardContent>
                       <CardFooter>

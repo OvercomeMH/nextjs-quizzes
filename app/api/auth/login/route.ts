@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/users'
 
+const SESSION_COOKIE_NAME = 'quiz-master-session'
+
 export async function POST(request: Request) {
   try {
     // Parse the request body
@@ -15,7 +17,7 @@ export async function POST(request: Request) {
     }
     
     // Authenticate the user
-    const user = authenticateUser(username, password)
+    const user = await authenticateUser(username, password)
     
     if (!user) {
       return NextResponse.json(
@@ -27,12 +29,24 @@ export async function POST(request: Request) {
     // Return user data (excluding password)
     const { password: _, ...userWithoutPassword } = user
     
-    return NextResponse.json({
+    // Create response with cookie
+    const response = NextResponse.json({
       success: true,
-      user: userWithoutPassword,
-      // Return userId for client-side session creation
-      userId: user.id
+      user: userWithoutPassword
     })
+    
+    // Set the session cookie
+    response.cookies.set({
+      name: SESSION_COOKIE_NAME,
+      value: user.id,
+      path: '/',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+      sameSite: 'strict'
+    })
+    
+    return response
   } catch (error) {
     console.error('Login error:', error)
     return NextResponse.json(

@@ -16,18 +16,30 @@ interface QuizOption {
 }
 
 interface QuizQuestion {
-  id: number;
+  id: string;
   text: string;
+  type: string;
+  points: number;
   options: QuizOption[];
   correctAnswer: string;
+  explanation?: string;
 }
 
 interface Quiz {
   id: string;
   title: string;
   description: string;
-  userAnswers: string[];
+  difficulty: string;
   questions: QuizQuestion[];
+  timeLimit: number;
+  metadata: {
+    createdAt: string;
+    updatedAt: string;
+    totalQuestions: number;
+    totalPoints: number;
+    averageRating: number;
+    timesPlayed: number;
+  };
 }
 
 interface PageParams {
@@ -45,82 +57,57 @@ export default function QuizResultsPage({ params }: { params: Promise<PageParams
   const percentage = Math.round((score / total) * 100);
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [userAnswers, setUserAnswers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // In a real app, you would fetch the quiz data and user's answers from an API
-    setTimeout(() => {
-      setQuiz({
-        id: quizId,
-        title: "Introduction to JavaScript",
-        description: "Test your knowledge of JavaScript basics",
-        userAnswers: ["c", "b", "a", "c", "c"],
-        questions: [
-          {
-            id: 1,
-            text: "Which of the following is NOT a JavaScript data type?",
-            options: [
-              { id: "a", text: "String" },
-              { id: "b", text: "Boolean" },
-              { id: "c", text: "Float" },
-              { id: "d", text: "Number" },
-            ],
-            correctAnswer: "c",
-          },
-          {
-            id: 2,
-            text: "What does the '===' operator do in JavaScript?",
-            options: [
-              { id: "a", text: "Checks for equality, but not type" },
-              { id: "b", text: "Checks for equality, including type" },
-              { id: "c", text: "Assigns a value" },
-              { id: "d", text: "Checks if one value is greater than another" },
-            ],
-            correctAnswer: "b",
-          },
-          {
-            id: 3,
-            text: "Which method is used to add an element to the end of an array?",
-            options: [
-              { id: "a", text: "push()" },
-              { id: "b", text: "pop()" },
-              { id: "c", text: "shift()" },
-              { id: "d", text: "unshift()" },
-            ],
-            correctAnswer: "a",
-          },
-          {
-            id: 4,
-            text: "What is the correct way to create a function in JavaScript?",
-            options: [
-              { id: "a", text: "function = myFunction() {}" },
-              { id: "b", text: "function:myFunction() {}" },
-              { id: "c", text: "function myFunction() {}" },
-              { id: "d", text: "create myFunction() {}" },
-            ],
-            correctAnswer: "c",
-          },
-          {
-            id: 5,
-            text: "Which of these is NOT a JavaScript framework or library?",
-            options: [
-              { id: "a", text: "React" },
-              { id: "b", text: "Angular" },
-              { id: "c", text: "Django" },
-              { id: "d", text: "Vue" },
-            ],
-            correctAnswer: "c",
-          },
-        ],
-      });
-      setLoading(false);
-    }, 1000);
-  }, [quizId]);
+    // Get answers from query params
+    const answersParam = searchParams.get("answers");
+    const answers = answersParam ? JSON.parse(decodeURIComponent(answersParam)) : [];
+    setUserAnswers(answers);
+    
+    // Fetch quiz data from API
+    const fetchQuiz = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/quizzes/${quizId}`);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            setError("Quiz not found");
+          } else {
+            setError("Failed to load quiz");
+          }
+          setLoading(false);
+          return;
+        }
+        
+        const quizData = await response.json();
+        setQuiz(quizData);
+        setLoading(false);
+      } catch (err) {
+        console.error("Error fetching quiz:", err);
+        setError("Failed to load quiz. Please try again later.");
+        setLoading(false);
+      }
+    };
+    
+    fetchQuiz();
+  }, [quizId, searchParams]);
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">Loading results...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center text-red-500">{error}</div>
       </div>
     );
   }
@@ -186,10 +173,10 @@ export default function QuizResultsPage({ params }: { params: Promise<PageParams
           <h2 className="text-xl font-bold mb-4">Question Review</h2>
           <div className="space-y-4">
             {quiz.questions.map((question, index) => {
-              const userAnswer = quiz.userAnswers[index]
-              const isCorrect = userAnswer === question.correctAnswer
-              const userOption = question.options.find((opt) => opt.id === userAnswer)
-              const correctOption = question.options.find((opt) => opt.id === question.correctAnswer)
+              const userAnswer = userAnswers[index] || '';
+              const isCorrect = userAnswer === question.correctAnswer;
+              const userOption = question.options.find((opt) => opt.id === userAnswer);
+              const correctOption = question.options.find((opt) => opt.id === question.correctAnswer);
 
               return (
                 <Card key={question.id} className={isCorrect ? "border-green-200" : "border-red-200"}>
@@ -208,11 +195,11 @@ export default function QuizResultsPage({ params }: { params: Promise<PageParams
                     <div className="space-y-2">
                       <div className="grid grid-cols-[20px_1fr] gap-2">
                         <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
-                          {userAnswer}
+                          {userAnswer || '-'}
                         </div>
                         <div>
                           <p className={`${isCorrect ? "text-green-600" : "text-red-600"}`}>
-                            Your answer: {userOption?.text}
+                            Your answer: {userOption?.text || 'Not answered'}
                           </p>
                         </div>
                       </div>
@@ -225,6 +212,12 @@ export default function QuizResultsPage({ params }: { params: Promise<PageParams
                           <div>
                             <p className="text-green-600">Correct answer: {correctOption?.text}</p>
                           </div>
+                        </div>
+                      )}
+                      
+                      {question.explanation && (
+                        <div className="mt-2 p-2 bg-muted rounded">
+                          <p className="text-sm">{question.explanation}</p>
                         </div>
                       )}
                     </div>

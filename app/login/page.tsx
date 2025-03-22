@@ -36,7 +36,7 @@ export default function LoginPage() {
         throw new Error(data.error || "Login failed")
       }
 
-      // Simplified: Skip cookie creation for now
+      // The cookie is set by the server automatically
       console.log("Login successful", data)
       
       // Redirect to profile

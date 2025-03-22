@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { createUserSession } from '@/lib/auth'
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -61,8 +60,8 @@ export default function RegisterPage() {
         throw new Error(data.error || 'Registration failed')
       }
 
-      // Create user session
-      createUserSession(data.userId)
+      // Cookie is set by the server automatically
+      console.log("Registration successful", data)
       
       // Redirect to profile
       router.push('/profile')

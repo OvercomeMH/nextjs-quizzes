@@ -13,19 +13,36 @@ import { AlertCircle, Clock } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 // Define types
-interface QuizQuestion {
-  id: number;
+interface QuizOption {
+  id: string;
   text: string;
-  options: { id: string; text: string }[];
+}
+
+interface QuizQuestion {
+  id: string;
+  text: string;
+  type: string;
+  points: number;
+  options: QuizOption[];
   correctAnswer: string;
+  explanation?: string;
 }
 
 interface Quiz {
   id: string;
   title: string;
   description: string;
+  difficulty: string;
   questions: QuizQuestion[];
   timeLimit: number;
+  metadata: {
+    createdAt: string;
+    updatedAt: string;
+    totalQuestions: number;
+    totalPoints: number;
+    averageRating: number;
+    timesPlayed: number;
+  };
 }
 
 interface PageParams {
@@ -42,78 +59,45 @@ export default function QuizPage({ params }: { params: Promise<PageParams> }) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [timeLeft, setTimeLeft] = useState(600); // 10 minutes in seconds
+  const [error, setError] = useState<string | null>(null);
+  const [timeLeft, setTimeLeft] = useState(600); // Default to 10 minutes, will be updated from quiz data
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // In a real app, you would fetch the quiz data from an API
-    setTimeout(() => {
-      setQuiz({
-        id: quizId,
-        title: "Introduction to JavaScript",
-        description: "Test your knowledge of JavaScript basics",
-        questions: [
-          {
-            id: 1,
-            text: "Which of the following is NOT a JavaScript data type?",
-            options: [
-              { id: "a", text: "String" },
-              { id: "b", text: "Boolean" },
-              { id: "c", text: "Float" },
-              { id: "d", text: "Number" },
-            ],
-            correctAnswer: "c",
-          },
-          {
-            id: 2,
-            text: "What does the '===' operator do in JavaScript?",
-            options: [
-              { id: "a", text: "Checks for equality, but not type" },
-              { id: "b", text: "Checks for equality, including type" },
-              { id: "c", text: "Assigns a value" },
-              { id: "d", text: "Checks if one value is greater than another" },
-            ],
-            correctAnswer: "b",
-          },
-          {
-            id: 3,
-            text: "Which method is used to add an element to the end of an array?",
-            options: [
-              { id: "a", text: "push()" },
-              { id: "b", text: "pop()" },
-              { id: "c", text: "shift()" },
-              { id: "d", text: "unshift()" },
-            ],
-            correctAnswer: "a",
-          },
-          {
-            id: 4,
-            text: "What is the correct way to create a function in JavaScript?",
-            options: [
-              { id: "a", text: "function = myFunction() {}" },
-              { id: "b", text: "function:myFunction() {}" },
-              { id: "c", text: "function myFunction() {}" },
-              { id: "d", text: "create myFunction() {}" },
-            ],
-            correctAnswer: "c",
-          },
-          {
-            id: 5,
-            text: "Which of these is NOT a JavaScript framework or library?",
-            options: [
-              { id: "a", text: "React" },
-              { id: "b", text: "Angular" },
-              { id: "c", text: "Django" },
-              { id: "d", text: "Vue" },
-            ],
-            correctAnswer: "c",
-          },
-        ],
-        timeLimit: 600,
-      });
-      setAnswers(new Array(5).fill(null));
-      setLoading(false);
-    }, 1000);
+    // Fetch quiz data from API
+    const fetchQuiz = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/quizzes/${quizId}`);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            setError("Quiz not found");
+          } else {
+            setError("Failed to load quiz");
+          }
+          setLoading(false);
+          return;
+        }
+        
+        const quizData = await response.json();
+        setQuiz(quizData);
+        
+        // Initialize answers array with null values
+        setAnswers(new Array(quizData.questions.length).fill(null));
+        
+        // Set time limit from quiz data
+        setTimeLeft(quizData.timeLimit);
+        
+        setLoading(false);
+      } catch (err) {
+        console.error("Error fetching quiz:", err);
+        setError("Failed to load quiz. Please try again later.");
+        setLoading(false);
+      }
+    };
+    
+    fetchQuiz();
   }, [quizId]);
 
   useEffect(() => {
@@ -160,13 +144,16 @@ export default function QuizPage({ params }: { params: Promise<PageParams> }) {
     let score = 0;
     answers.forEach((answer, index) => {
       if (answer === quiz.questions[index].correctAnswer) {
-        score++;
+        score += quiz.questions[index].points;
       }
     });
 
+    // Encode answers as URL parameter
+    const encodedAnswers = encodeURIComponent(JSON.stringify(answers));
+    
     // In a real app, you would submit the answers to an API
     setTimeout(() => {
-      router.push(`/quizzes/${quizId}/results?score=${score}&total=${quiz.questions.length}`);
+      router.push(`/quizzes/${quizId}/results?score=${score}&total=${quiz.metadata.totalPoints}&answers=${encodedAnswers}`);
     }, 1000);
   };
 
@@ -180,6 +167,14 @@ export default function QuizPage({ params }: { params: Promise<PageParams> }) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">Loading quiz...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center text-red-500">{error}</div>
       </div>
     );
   }

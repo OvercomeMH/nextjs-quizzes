@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { addUser, findUserByUsername } from '@/lib/users'
 
+const SESSION_COOKIE_NAME = 'quiz-master-session'
+
 export async function POST(request: Request) {
   try {
     // Parse the request body
@@ -15,7 +17,7 @@ export async function POST(request: Request) {
     }
     
     // Check if username already exists
-    const existingUser = findUserByUsername(username)
+    const existingUser = await findUserByUsername(username)
     if (existingUser) {
       return NextResponse.json(
         { error: "Username already exists" },
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
     }
     
     // Create new user
-    const newUser = addUser({
+    const newUser = await addUser({
       username,
       password, // Note: In a real app, we would hash this
       name,
@@ -33,6 +35,7 @@ export async function POST(request: Request) {
         quizzesTaken: 0,
         averageScore: 0,
         totalPoints: 0,
+        rank: "Beginner"
       },
       settings: {
         emailNotifications: true,
@@ -43,11 +46,24 @@ export async function POST(request: Request) {
     // Return user data (excluding password)
     const { password: _, ...userWithoutPassword } = newUser
     
-    return NextResponse.json({
+    // Create response with cookie
+    const response = NextResponse.json({
       success: true,
-      user: userWithoutPassword,
-      userId: newUser.id
+      user: userWithoutPassword
     })
+    
+    // Set the session cookie
+    response.cookies.set({
+      name: SESSION_COOKIE_NAME,
+      value: newUser.id,
+      path: '/',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+      sameSite: 'strict'
+    })
+    
+    return response
   } catch (error) {
     console.error('Registration error:', error)
     return NextResponse.json(

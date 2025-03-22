@@ -1,0 +1,21 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "username": "testuser",
+      "password": "password123",
+      "name": "John Salter",
+      "email": "hot@hot.com",
+      "stats": {
+        "quizzesTaken": 5,
+        "averageScore": 82,
+        "totalPoints": 410,
+        "rank": "Quiz Novice"
+      },
+      "settings": {
+        "emailNotifications": false,
+        "publicProfile": false
+      }
+    }
+  ]
+}

@@ -1,7 +1,5 @@
 "use client"
 
-import { getUserById } from './users'
-
 // In a real app, you would use a secure library for session management
 // This is a very simplified version for testing
 
@@ -33,12 +31,6 @@ export function createUserSession(userId: string) {
 
 export function getCurrentUserId(): string | null {
   return getClientCookie(SESSION_COOKIE_NAME);
-}
-
-export function getCurrentUser() {
-  const userId = getCurrentUserId();
-  if (!userId) return null;
-  return getUserById(userId);
 }
 
 export function logout() {

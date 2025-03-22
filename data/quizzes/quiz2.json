@@ -1,0 +1,121 @@
+{
+  "id": "quiz2",
+  "title": "Chess Fundamentals",
+  "description": "Test your knowledge of basic chess concepts and rules",
+  "difficulty": "beginner",
+  "timeLimit": 600,
+  "questions": [
+    {
+      "id": "q1", 
+      "text": "How does the knight move in chess?",
+      "type": "multiple-choice",
+      "points": 10,
+      "options": [
+        {
+          "id": "a",
+          "text": "In an L-shape: 2 squares in one direction and 1 square perpendicular"
+        },
+        {
+          "id": "b", 
+          "text": "Diagonally any number of squares"
+        },
+        {
+          "id": "c",
+          "text": "Only forward one square at a time"
+        },
+        {
+          "id": "d",
+          "text": "In any direction one square at a time"
+        }
+      ],
+      "correctAnswer": "a",
+      "explanation": "The knight is unique in chess as it moves in an L-shape pattern: two squares in one direction (horizontal or vertical) followed by one square perpendicular to that direction."
+    },
+    {
+      "id": "q2",
+      "text": "What is 'castling' in chess?",
+      "type": "multiple-choice", 
+      "points": 10,
+      "options": [
+        {
+          "id": "a",
+          "text": "Taking an opponent's piece"
+        },
+        {
+          "id": "b",
+          "text": "Promoting a pawn to a queen"
+        },
+        {
+          "id": "c",
+          "text": "A special move involving the king and rook"
+        },
+        {
+          "id": "d",
+          "text": "Putting the opponent in check"
+        }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Castling is a special move that allows your king to move two squares towards a rook on its original square, then that rook moves to the square the king crossed."
+    },
+    {
+      "id": "q3",
+      "text": "What is 'en passant' in chess?",
+      "type": "multiple-choice",
+      "points": 10,
+      "options": [
+        {
+          "id": "a",
+          "text": "A way to promote pawns"
+        },
+        {
+          "id": "b",
+          "text": "A special pawn capture move"
+        },
+        {
+          "id": "c",
+          "text": "A type of checkmate"
+        },
+        {
+          "id": "d",
+          "text": "A defensive formation"
+        }
+      ],
+      "correctAnswer": "b",
+      "explanation": "En passant is a special pawn capture that can occur when a pawn moves two squares forward from its starting position and lands beside an enemy pawn."
+    },
+    {
+      "id": "q4",
+      "text": "What is checkmate in chess?",
+      "type": "multiple-choice",
+      "points": 10,
+      "options": [
+        {
+          "id": "a",
+          "text": "When a king is under attack"
+        },
+        {
+          "id": "b",
+          "text": "When all pieces are captured"
+        },
+        {
+          "id": "c",
+          "text": "When the king is in check and cannot escape capture"
+        },
+        {
+          "id": "d",
+          "text": "When only kings remain on the board"
+        }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Checkmate occurs when a king is in check (under attack) and there are no legal moves to escape the check, ending the game."
+    }
+  ],
+  "metadata": {
+    "createdAt": "2024-01-20T12:00:00Z",
+    "updatedAt": "2024-01-20T12:00:00Z",
+    "totalQuestions": 4,
+    "totalPoints": 40,
+    "averageRating": 4.5,
+    "timesPlayed": 0
+  }
+}
