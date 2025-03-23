@@ -35,3 +35,32 @@ This script fixes the submissions table by:
 - Creating indexes for better performance
 
 Run this if you're seeing errors like "column submissions.created_at does not exist". 
+
+### validate-db-schema.js
+
+A simple validation script that checks if our database tables are accessible. It attempts to:
+- Connect to the Supabase database using your credentials
+- Check for access to all expected tables
+- Verify that all columns in each table are accessible
+- Report any issues it finds
+
+Run it with:
+```
+npm run validate:db
+```
+
+### generate-db-docs.js
+
+This script automatically generates documentation about your database schema by:
+- Connecting to your Supabase database
+- Querying each table to understand its structure
+- Generating a markdown file with detailed documentation of tables and columns
+- Creating an Entity-Relationship Diagram using Mermaid syntax
+- Saving the documentation in the `docs/` directory
+
+Run it with:
+```
+npm run generate:db-docs
+```
+
+This is especially useful when you've made changes to your database schema and need to update documentation. 

@@ -119,13 +119,16 @@ export default function AdminDashboard() {
             <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/dashboard">
               Dashboard
             </Link>
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/quizzes/create">
+            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/quizzes">
               Quizzes
             </Link>
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/dashboard">
+            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/users">
               Users
             </Link>
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/dashboard">
+            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/activity">
+              Activity
+            </Link>
+            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/analytics">
               Analytics
             </Link>
           </nav>
@@ -240,126 +243,6 @@ export default function AdminDashboard() {
                   </CardContent>
                 </Card>
               </div>
-
-              <Tabs defaultValue="quizzes" className="space-y-4">
-                <TabsList>
-                  <TabsTrigger value="quizzes">Quizzes</TabsTrigger>
-                  <TabsTrigger value="users">Users</TabsTrigger>
-                </TabsList>
-                <TabsContent value="quizzes" className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold">Manage Quizzes</h2>
-                    <Button asChild>
-                      <Link href="/admin/quizzes/create">Create Quiz</Link>
-                    </Button>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {quizzes.length > 0 ? (
-                      quizzes.map((quiz) => (
-                        <Card key={quiz.id}>
-                          <CardHeader>
-                            <CardTitle>{quiz.title}</CardTitle>
-                            <CardDescription>{quiz.description}</CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="space-y-2">
-                              <div className="flex justify-between">
-                                <span>Questions:</span>
-                                <span className="font-medium">{quiz.questions}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Submissions:</span>
-                                <span className="font-medium">{quiz.submissions}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Average Score:</span>
-                                <span className="font-medium">{quiz.averageScore}%</span>
-                              </div>
-                            </div>
-                          </CardContent>
-                          <CardFooter className="flex gap-2">
-                            <Button variant="outline" size="sm" className="w-full" asChild>
-                              <Link href={`/admin/quizzes/${quiz.id}/edit`}>Edit</Link>
-                            </Button>
-                            <Button variant="outline" size="sm" className="w-full">
-                              Delete
-                            </Button>
-                          </CardFooter>
-                        </Card>
-                      ))
-                    ) : (
-                      <div className="col-span-3 text-center py-10">
-                        <p>No quizzes available. Create your first quiz!</p>
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-                <TabsContent value="users" className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold">Manage Users</h2>
-                    <Button asChild>
-                      <Link href="/admin/users/create">Add User</Link>
-                    </Button>
-                  </div>
-                  {users.length > 0 ? (
-                    <div className="rounded-md border overflow-hidden">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Name
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Email
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Quizzes Taken
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Average Score
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {users.map((user) => (
-                            <tr key={user.id}>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="font-medium">{user.name}</div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div>{user.email}</div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div>{user.quizzesTaken}</div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div>{user.averageScore}%</div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <div className="flex gap-2">
-                                  <Button variant="outline" size="sm" asChild>
-                                    <Link href={`/admin/users/${user.id}`}>View</Link>
-                                  </Button>
-                                  <Button variant="outline" size="sm">
-                                    Delete
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="text-center py-10">
-                      <p>No users available.</p>
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
             </>
           )}
         </div>

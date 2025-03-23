@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowLeft, User, Mail, Calendar, Award, Clock } from "lucide-react"
+import React from "react"
 
 // Define types for user data
 interface UserSubmission {
@@ -41,8 +42,10 @@ interface UserDetails {
   recentSubmissions: UserSubmission[];
 }
 
-export default function UserDetailPage({ params }: { params: { id: string } }) {
-  const userId = params.id;
+export default function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  // Unwrap params using React.use()
+  const unwrappedParams = React.use(params);
+  const userId = unwrappedParams.id;
   const [user, setUser] = useState<UserDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

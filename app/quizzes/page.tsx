@@ -28,14 +28,12 @@ export default function QuizzesPage() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<string>('Initializing...')
 
   useEffect(() => {
     // Fetch quizzes from Supabase
     const fetchQuizzes = async () => {
       try {
         setLoading(true)
-        setDebugInfo('Connecting to Supabase...')
         
         // Query the quizzes table
         const { data, error } = await supabase
@@ -44,16 +42,13 @@ export default function QuizzesPage() {
           .order('created_at', { ascending: false })
         
         if (error) {
-          setDebugInfo(`Supabase error: ${error.message}`)
           throw new Error(error.message)
         }
         
         if (!data) {
-          setDebugInfo('No quiz data received from Supabase')
           throw new Error('No quizzes found')
         }
         
-        setDebugInfo(`Received ${data.length} quizzes from Supabase`)
         console.log('Raw quiz data from Supabase:', data)
         
         // Transform the Supabase data to match our Quiz interface
@@ -70,12 +65,10 @@ export default function QuizzesPage() {
           }
         }))
         
-        setDebugInfo(`Formatted ${formattedQuizzes.length} quizzes successfully`)
         setQuizzes(formattedQuizzes)
       } catch (err) {
         console.error('Error fetching quizzes:', err)
         setError('Failed to load quizzes. Please try again later.')
-        setDebugInfo(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`)
       } finally {
         setLoading(false)
       }
@@ -105,11 +98,6 @@ export default function QuizzesPage() {
         </div>
       </div>
 
-      {/* Add debug info for development */}
-      <div className="mb-4 p-2 bg-gray-100 text-sm rounded">
-        <p>Debug: {debugInfo}</p>
-      </div>
-      
       {loading ? (
         <div className="flex justify-center items-center h-64">
           <p>Loading quizzes from Supabase...</p>

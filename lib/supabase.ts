@@ -1,11 +1,22 @@
 import { createClient } from '@supabase/supabase-js'
+import type { Database } from './database.types'
 
 // These environment variables will be loaded from .env.local
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
+// Adding fallback URLs for development to prevent crashes during testing
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://missing-url.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'missing-key'
+
+// Log warning if environment variables are missing
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  console.warn('Warning: Supabase environment variables are missing!')
+  console.warn('Make sure to set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local')
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn('Using placeholder values for development/testing')
+  }
+}
 
 // Create a single supabase client for interacting with your database
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
 
 // For browser-only usage, we can use this to check auth state
 export const getUser = async () => {
@@ -19,68 +30,11 @@ export const getSession = async () => {
   return session
 }
 
-// Type definitions for our database tables
-export type Tables = {
-  users: {
-    id: string
-    username: string
-    email: string
-    full_name: string
-    created_at: string
-    quizzes_taken: number
-    average_score: number
-    total_points: number
-    rank: string
-    email_notifications: boolean
-    public_profile: boolean
-  }
-  quizzes: {
-    id: string
-    title: string
-    description: string
-    difficulty: string
-    category: string
-    time_limit: number
-    created_at: string
-    updated_at: string
-    total_questions: number
-    total_points: number
-    average_rating: number
-    times_played: number
-  }
-  questions: {
-    id: string
-    quiz_id: string
-    text: string
-    type: string
-    points: number
-    correct_answer: string
-    explanation: string
-    order_num: number
-    created_at: string
-  }
-  question_possible_answers: {
-    id: string
-    question_id: string
-    option_id: string
-    text: string
-    order_num: number
-  }
-  submissions: {
-    id: string
-    user_id: string
-    quiz_id: string
-    score: number
-    total_possible: number
-    time_spent: number
-    completed_at: string
-  }
-  user_answers: {
-    id: string
-    submission_id: string
-    question_id: string
-    selected_option: string
-    is_correct: boolean
-    created_at: string
-  }
-} 
+// Export commonly used types from the Database type
+export type Tables = Database['public']['Tables']
+export type Enums = Database['public']['Enums']
+
+// Helper type to get a specific table's type
+export type TableRow<T extends keyof Tables> = Tables[T]['Row']
+export type TableInsert<T extends keyof Tables> = Tables[T]['Insert']
+export type TableUpdate<T extends keyof Tables> = Tables[T]['Update'] 

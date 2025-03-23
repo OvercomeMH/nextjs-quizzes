@@ -1,0 +1,45 @@
+name: Database Tests
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'lib/supabase.ts'
+      - 'tests/supabase-access.test.ts'
+      - '.github/workflows/database-tests.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'lib/supabase.ts'
+      - 'tests/supabase-access.test.ts'
+  # Allow manual triggering from GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  test-database-access:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Create .env.local file
+        run: |
+          echo "NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" > .env.local
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" >> .env.local
+      
+      - name: Run database access tests
+        run: npm test tests/supabase-access.test.ts
+      
+      - name: Notify on fail
+        if: failure()
+        run: |
+          echo "::warning ::Database access tests failed. Check schema for changes and update types!" 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import React from "react"
 import {
   BarChart,
   Bar,
@@ -20,72 +21,125 @@ import {
   LineChart,
   Line,
   Legend,
+  ScatterChart,
+  Scatter,
+  ZAxis,
 } from "recharts"
 
-export default function QuizAnalyticsPage({ params }) {
-  const [quiz, setQuiz] = useState(null)
-  const [loading, setLoading] = useState(true)
+// Define types for quiz data
+interface QuestionStat {
+  id: string;
+  question: string;
+  question_number?: number;
+  correct: number;
+  incorrect: number;
+}
+
+interface ScoreDistribution {
+  score: string;
+  count: number;
+}
+
+interface CompletionTime {
+  time: string;
+  count: number;
+}
+
+interface CompletionTimePoint {
+  id: string;
+  user: string;
+  time: number;
+  score: number;
+  maxScore: number;
+  date: string;
+}
+
+interface SubmissionOverTime {
+  date: string;
+  submissions: number;
+}
+
+interface RecentSubmission {
+  id: string;
+  user: string;
+  score: string;
+  percentage: number;
+  time: string;
+  date: string;
+}
+
+interface QuizData {
+  id: string;
+  title: string;
+  description: string;
+  totalSubmissions: number;
+  averageScore: number;
+  questionStats: QuestionStat[];
+  scoreDistribution: ScoreDistribution[];
+  completionTime: CompletionTime[];
+  completionTimeScatter: CompletionTimePoint[];
+  submissionsOverTime: SubmissionOverTime[];
+  recentSubmissions: RecentSubmission[];
+}
+
+export default function QuizAnalyticsPage({ params }: { params: Promise<{ id: string }> }) {
+  // Unwrap params using React.use()
+  const unwrappedParams = React.use(params);
+  const quizId = unwrappedParams.id;
+  const [quiz, setQuiz] = useState<QuizData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // In a real app, you would fetch this data from an API
-    setTimeout(() => {
-      setQuiz({
-        id: params.id,
-        title: "Introduction to JavaScript",
-        description: "Test your knowledge of JavaScript basics",
-        totalSubmissions: 24,
-        averageScore: 78,
-        questionStats: [
-          { question: "Q1", correct: 20, incorrect: 4 },
-          { question: "Q2", correct: 15, incorrect: 9 },
-          { question: "Q3", correct: 22, incorrect: 2 },
-          { question: "Q4", correct: 18, incorrect: 6 },
-          { question: "Q5", correct: 12, incorrect: 12 },
-        ],
-        scoreDistribution: [
-          { score: "0-20%", count: 1 },
-          { score: "21-40%", count: 2 },
-          { score: "41-60%", count: 5 },
-          { score: "61-80%", count: 10 },
-          { score: "81-100%", count: 6 },
-        ],
-        completionTime: [
-          { time: "<2 min", count: 3 },
-          { time: "2-4 min", count: 8 },
-          { time: "4-6 min", count: 10 },
-          { time: "6-8 min", count: 2 },
-          { time: ">8 min", count: 1 },
-        ],
-        submissionsOverTime: [
-          { date: "Jan 1", submissions: 2 },
-          { date: "Jan 2", submissions: 3 },
-          { date: "Jan 3", submissions: 1 },
-          { date: "Jan 4", submissions: 5 },
-          { date: "Jan 5", submissions: 4 },
-          { date: "Jan 6", submissions: 6 },
-          { date: "Jan 7", submissions: 3 },
-        ],
-        recentSubmissions: [
-          { user: "John Doe", score: "8/10", time: "3m 45s", date: "2 hours ago" },
-          { user: "Jane Smith", score: "7/10", time: "5m 12s", date: "5 hours ago" },
-          { user: "Bob Johnson", score: "9/10", time: "4m 30s", date: "1 day ago" },
-          { user: "Alice Brown", score: "6/10", time: "6m 20s", date: "1 day ago" },
-          { user: "Mike Wilson", score: "10/10", time: "3m 10s", date: "2 days ago" },
-        ],
-      })
-      setLoading(false)
-    }, 1000)
-  }, [params.id])
+    // Fetch quiz analytics data from API
+    const fetchQuizData = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/admin/quizzes/${quizId}/analytics`);
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          console.error('API error:', errorData);
+          throw new Error(`Error fetching quiz analytics: ${response.status}${errorData?.error ? ` - ${errorData.error}` : ''}`);
+        }
+        
+        const data = await response.json();
+        setQuiz(data);
+      } catch (err) {
+        console.error('Failed to fetch quiz analytics:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load quiz data. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchQuizData();
+  }, [quizId]);
 
-  if (loading) {
+  if (loading || !quiz) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">Loading analytics...</div>
       </div>
-    )
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center text-red-500">{error}</div>
+      </div>
+    );
   }
 
-  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"]
+  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
+  
+  // Function to determine marker size based on score percentage
+  const getMarkerSize = (score: number, maxScore: number) => {
+    const percentage = (score / maxScore) * 100;
+    // Size range: 40-100 based on score percentage
+    return Math.max(40, Math.min(100, 40 + percentage * 0.6));
+  };
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -162,7 +216,7 @@ export default function QuizAnalyticsPage({ params }) {
                   <CardContent>
                     <div className="h-[300px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={quiz.scoreDistribution}>
+                        <BarChart data={quiz.scoreDistribution || []}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="score" />
                           <YAxis />
@@ -176,30 +230,59 @@ export default function QuizAnalyticsPage({ params }) {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Completion Time</CardTitle>
-                    <CardDescription>How long it takes users to complete the quiz</CardDescription>
+                    <CardTitle>Completion Time Distribution</CardTitle>
+                    <CardDescription>Time taken by users to complete the quiz</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="h-[300px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={quiz.completionTime}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="count"
-                            label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                        {quiz.completionTimeScatter && quiz.completionTimeScatter.length > 0 ? (
+                          <ScatterChart
+                            margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
                           >
-                            {quiz.completionTime.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip />
-                          <Legend />
-                        </PieChart>
+                            <CartesianGrid />
+                            <XAxis 
+                              type="number" 
+                              dataKey="time" 
+                              name="Time (minutes)" 
+                              domain={[0, 60]}
+                              label={{ value: 'Minutes', position: 'insideBottomRight', offset: -5 }}
+                            />
+                            <YAxis 
+                              type="number" 
+                              dataKey="percentage" 
+                              name="Score (%)" 
+                              domain={[0, 100]}
+                              label={{ value: 'Score %', angle: -90, position: 'insideLeft' }}
+                            />
+                            <ZAxis 
+                              type="number" 
+                              range={[40, 100]} 
+                              domain={[0, 100]}
+                            />
+                            <Tooltip 
+                              cursor={{ strokeDasharray: '3 3' }}
+                              formatter={(value, name) => {
+                                if (name === 'Time (minutes)') return [`${value} min`, name];
+                                return [`${value}%`, 'Score'];
+                              }}
+                            />
+                            <Legend />
+                            <Scatter 
+                              name="Quiz Submissions" 
+                              data={quiz.completionTimeScatter.map(point => ({
+                                ...point,
+                                percentage: Math.round((point.score / point.maxScore) * 100),
+                                z: getMarkerSize(point.score, point.maxScore)
+                              }))} 
+                              fill="#8884d8"
+                            />
+                          </ScatterChart>
+                        ) : (
+                          <div className="flex h-full items-center justify-center">
+                            <p className="text-muted-foreground">No completion time data available</p>
+                          </div>
+                        )}
                       </ResponsiveContainer>
                     </div>
                   </CardContent>
@@ -214,7 +297,7 @@ export default function QuizAnalyticsPage({ params }) {
                 <CardContent>
                   <div className="h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={quiz.submissionsOverTime}>
+                      <LineChart data={quiz.submissionsOverTime || []}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="date" />
                         <YAxis />
@@ -238,7 +321,7 @@ export default function QuizAnalyticsPage({ params }) {
                   <div className="h-[400px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
-                        data={quiz.questionStats}
+                        data={quiz.questionStats || []}
                         layout="vertical"
                         margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                       >
@@ -257,11 +340,11 @@ export default function QuizAnalyticsPage({ params }) {
 
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {quiz.questionStats.map((stat, index) => {
-                  const total = stat.correct + stat.incorrect
-                  const correctPercentage = Math.round((stat.correct / total) * 100)
+                  const total = stat.correct + stat.incorrect;
+                  const correctPercentage = total > 0 ? Math.round((stat.correct / total) * 100) : 0;
 
                   return (
-                    <Card key={index}>
+                    <Card key={stat.id}>
                       <CardHeader>
                         <CardTitle>Question {index + 1}</CardTitle>
                         <CardDescription>Performance analysis</CardDescription>
@@ -304,7 +387,7 @@ export default function QuizAnalyticsPage({ params }) {
                         </div>
                       </CardContent>
                     </Card>
-                  )
+                  );
                 })}
               </div>
             </TabsContent>
@@ -328,8 +411,8 @@ export default function QuizAnalyticsPage({ params }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {quiz.recentSubmissions.map((submission, index) => (
-                          <tr key={index} className="border-b">
+                        {quiz.recentSubmissions.map((submission) => (
+                          <tr key={submission.id} className="border-b">
                             <td className="py-3 px-4">{submission.user}</td>
                             <td className="py-3 px-4">{submission.score}</td>
                             <td className="py-3 px-4">{submission.time}</td>

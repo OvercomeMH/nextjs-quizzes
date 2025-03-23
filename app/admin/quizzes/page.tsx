@@ -105,11 +105,17 @@ export default function AdminQuizzesPage() {
               <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/dashboard">
                 Dashboard
               </Link>
-              <Link
-                className="text-sm font-medium hover:underline underline-offset-4 text-primary"
-                href="/admin/quizzes"
-              >
-                Manage Quizzes
+              <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/quizzes">
+                Quizzes
+              </Link>
+              <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/users">
+                Users
+              </Link>
+              <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/activity">
+                Activity
+              </Link>
+              <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/analytics">
+                Analytics
               </Link>
             </nav>
             <div className="flex items-center gap-2">

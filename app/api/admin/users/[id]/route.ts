@@ -17,10 +17,11 @@ interface SubmissionWithQuiz {
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = params.id;
+    const unwrappedParams = await params;
+    const userId = unwrappedParams.id;
     
     // Fetch user details from Supabase
     const { data: user, error: userError } = await supabase
