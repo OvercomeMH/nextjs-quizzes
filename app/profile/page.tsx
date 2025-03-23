@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,362 +9,322 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { useAuth } from "@/components/auth/AuthProvider"
+import ProtectedRoute from "@/components/auth/ProtectedRoute"
+import { supabase } from "@/lib/supabase"
+import { AlertCircle } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 interface UserProfile {
-  name: string
+  id: string
+  username: string
   email: string
-  stats: {
-    quizzesTaken: number
-    averageScore: number
-    totalPoints: number
-    rank: string
-  }
-  settings: {
-    emailNotifications: boolean
-    publicProfile: boolean
-  }
+  full_name: string
+  quizzes_taken: number
+  average_score: number
+  total_points: number
+  rank: string
+  email_notifications: boolean
+  public_profile: boolean
+  created_at: string
 }
 
 export default function ProfilePage() {
+  const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [name, setName] = useState<string | undefined>(undefined)
-  const [email, setEmail] = useState<string | undefined>(undefined)
+  const [nameInput, setNameInput] = useState<string>("")
+  const [emailInput, setEmailInput] = useState<string>("")
+  const [usernameInput, setUsernameInput] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
-  const [emailNotifications, setEmailNotifications] = useState<boolean | undefined>(undefined)
-  const [publicProfile, setPublicProfile] = useState<boolean | undefined>(undefined)
-  const router = useRouter()
+  const [emailNotifications, setEmailNotifications] = useState(false)
+  const [publicProfile, setPublicProfile] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   
   // Fetch profile data when component mounts
   useEffect(() => {
     const fetchProfile = async () => {
+      if (!user) return;
+      
       try {
-        const response = await fetch('/api/user/profile')
-        if (!response.ok) {
-          throw new Error('Failed to fetch profile')
-        }
+        setIsLoadingProfile(true);
+        setError(null);
         
-        const data = await response.json()
-        setProfile(data)
+        const { data, error } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+          
+        if (error) throw error;
         
-        // Only set state if it hasn't been set or is different from current values
-        if (name === undefined || name !== data.name) setName(data.name)
-        if (email === undefined || email !== data.email) setEmail(data.email)
-        if (emailNotifications === undefined || emailNotifications !== data.settings.emailNotifications) 
-          setEmailNotifications(data.settings.emailNotifications)
-        if (publicProfile === undefined || publicProfile !== data.settings.publicProfile) 
-          setPublicProfile(data.settings.publicProfile)
-      } catch (error) {
-        console.error('Error fetching profile:', error)
+        setProfile(data);
+        
+        // Set form values
+        setNameInput(data.full_name || "");
+        setEmailInput(data.email || "");
+        setUsernameInput(data.username || "");
+        setEmailNotifications(data.email_notifications || false);
+        setPublicProfile(data.public_profile || false);
+      } catch (err: any) {
+        console.error("Error fetching profile:", err);
+        setError(err.message || "Failed to load profile data");
       } finally {
-        setIsLoadingProfile(false)
+        setIsLoadingProfile(false);
       }
-    }
+    };
     
-    fetchProfile()
-  }, []) // We still want this to run only on mount
-
-  // Handle logout - simplified for testing
-  const handleLogout = () => {
-    // For now, just redirect to login
-    router.push('/login')
-  }
+    fetchProfile();
+  }, [user]);
 
   // Handle settings changes
-  const updateSettings = async (setting: string, value: boolean) => {
+  const updateSettings = async (setting: 'email_notifications' | 'public_profile', value: boolean) => {
+    if (!user) return;
+    
     try {
+      setError(null);
+      
       // Create an object with just the changed setting
-      const updatedSettings = { [setting]: value }
+      const updatedSettings = { [setting]: value };
       
-      // Send to the settings API
-      const response = await fetch('/api/user/settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updatedSettings),
-      })
+      // Update the settings in Supabase
+      const { error } = await supabase
+        .from("users")
+        .update(updatedSettings)
+        .eq("id", user.id);
+        
+      if (error) throw error;
       
-      if (!response.ok) {
-        throw new Error('Failed to update settings')
-      }
+      // Update the local state
+      setProfile(prev => prev ? { ...prev, [setting]: value } : null);
+      setSuccessMessage("Settings updated successfully!");
       
-      // Get the response data
-      const data = await response.json()
-      
-      if (data.success) {
-        // Update both the profile data and individual state variables
-        if (profile) {
-          // Update the profile state
-          setProfile({
-            ...profile,
-            settings: data.settings
-          })
-          
-          // Also update the individual state variables
-          setEmailNotifications(data.settings.emailNotifications)
-          setPublicProfile(data.settings.publicProfile)
-        }
-      }
-    } catch (error) {
-      console.error('Error updating settings:', error)
-      alert('Failed to update settings. Please try again.')
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      console.error("Error updating settings:", err);
+      setError(err.message || "Failed to update settings");
     }
-  }
+  };
   
   // Handle email notifications toggle
   const handleEmailNotificationsChange = (checked: boolean) => {
-    setEmailNotifications(checked)
-    updateSettings('emailNotifications', checked)
-  }
+    setEmailNotifications(checked);
+    updateSettings('email_notifications', checked);
+  };
   
   // Handle public profile toggle
   const handlePublicProfileChange = (checked: boolean) => {
-    setPublicProfile(checked)
-    updateSettings('publicProfile', checked)
-  }
+    setPublicProfile(checked);
+    updateSettings('public_profile', checked);
+  };
 
   const handleUpdateProfile = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    if (!user) return;
+    
+    setIsLoading(true);
+    setError(null);
     
     try {
-      // Send data to the API
-      const response = await fetch('/api/user/profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name,
-          email,
-          settings: {
-            emailNotifications,
-            publicProfile
-          }
-        }),
-      })
+      // Update user profile in Supabase
+      const { error } = await supabase
+        .from("users")
+        .update({
+          full_name: nameInput,
+          username: usernameInput,
+        })
+        .eq("id", user.id);
       
-      if (!response.ok) {
-        throw new Error('Failed to update profile')
+      if (error) throw error;
+      
+      // Update the email in Supabase Auth if it changed
+      if (emailInput !== user.email) {
+        const { error: emailError } = await supabase.auth.updateUser({
+          email: emailInput,
+        });
+        
+        if (emailError) throw emailError;
       }
       
-      // Get the updated profile data
-      const updatedProfile = await response.json()
-      setProfile(updatedProfile)
+      // Refetch the profile to get the updated data
+      const { data: updatedProfile, error: fetchError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+        
+      if (fetchError) throw fetchError;
       
-      // Show success message
-      alert('Profile updated successfully!')
-    } catch (error) {
-      console.error('Error updating profile:', error)
-      alert('Failed to update profile. Please try again.')
+      setProfile(updatedProfile);
+      setSuccessMessage("Profile updated successfully!");
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      console.error("Error updating profile:", err);
+      setError(err.message || "Failed to update profile");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   if (isLoadingProfile) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center">
         <div className="text-xl">Loading profile...</div>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b bg-background">
-        <div className="container flex h-16 items-center justify-between py-4">
-          <div className="flex items-center gap-2">
-            <Link href="/" className="font-bold">
-              QuizMaster
+    <ProtectedRoute>
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold">Your Profile</h1>
+          <div className="flex gap-4">
+            <Link href="/dashboard">
+              <Button variant="outline">Dashboard</Button>
             </Link>
-          </div>
-          <nav className="hidden md:flex gap-6">
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/dashboard">
-              Dashboard
-            </Link>
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/dashboard">
-              Quizzes
-            </Link>
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/profile">
-              Profile
-            </Link>
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/dashboard">
-              Admin
-            </Link>
-          </nav>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              Logout
-            </Button>
+            <Button onClick={() => signOut()} variant="destructive">Sign Out</Button>
           </div>
         </div>
-      </header>
-      <main className="flex-1 container py-6">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-3xl font-bold mb-6">Your Profile</h1>
+        
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        
+        {successMessage && (
+          <Alert className="mb-6 bg-green-50 border-green-200 text-green-800">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Success</AlertTitle>
+            <AlertDescription>{successMessage}</AlertDescription>
+          </Alert>
+        )}
           
-          <Tabs defaultValue="info" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 mb-8">
-              <TabsTrigger value="info">Personal Info</TabsTrigger>
-              <TabsTrigger value="stats">Statistics</TabsTrigger>
-              <TabsTrigger value="settings">Settings</TabsTrigger>
-              <TabsTrigger value="admin">Admin</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="info" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Personal Information</CardTitle>
-                  <CardDescription>Update your personal details here</CardDescription>
-                </CardHeader>
-                <form onSubmit={handleUpdateProfile}>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Full Name</Label>
-                      <Input 
-                        id="name" 
-                        value={name} 
-                        onChange={(e) => setName(e.target.value)} 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input 
-                        id="email" 
-                        type="email" 
-                        value={email} 
-                        onChange={(e) => setEmail(e.target.value)} 
-                      />
-                    </div>
-                  </CardContent>
-                  <CardFooter>
-                    <Button type="submit" disabled={isLoading}>
-                      {isLoading ? "Saving..." : "Save Changes"}
-                    </Button>
-                  </CardFooter>
-                </form>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="stats" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Your Quiz Statistics</CardTitle>
-                  <CardDescription>See how you've been performing</CardDescription>
-                </CardHeader>
+        <Tabs defaultValue="info" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-8">
+            <TabsTrigger value="info">Personal Info</TabsTrigger>
+            <TabsTrigger value="stats">Statistics</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="info" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Personal Information</CardTitle>
+                <CardDescription>Update your personal details here</CardDescription>
+              </CardHeader>
+              <form onSubmit={handleUpdateProfile}>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2 p-4 border rounded-lg">
-                      <p className="text-sm text-muted-foreground">Quizzes Taken</p>
-                      <p className="text-2xl font-bold">{profile?.stats.quizzesTaken}</p>
-                    </div>
-                    <div className="space-y-2 p-4 border rounded-lg">
-                      <p className="text-sm text-muted-foreground">Average Score</p>
-                      <p className="text-2xl font-bold">{profile?.stats.averageScore}%</p>
-                    </div>
-                    <div className="space-y-2 p-4 border rounded-lg">
-                      <p className="text-sm text-muted-foreground">Total Points</p>
-                      <p className="text-2xl font-bold">{profile?.stats.totalPoints}</p>
-                    </div>
-                    <div className="space-y-2 p-4 border rounded-lg">
-                      <p className="text-sm text-muted-foreground">Rank</p>
-                      <div className="text-2xl font-bold flex items-center gap-2">
-                        {profile?.stats.rank} <Badge>Level 3</Badge>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="settings" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Account Settings</CardTitle>
-                  <CardDescription>Manage your account preferences</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Email Notifications</Label>
-                      <p className="text-sm text-muted-foreground">Receive emails about new quizzes</p>
-                    </div>
-                    <Switch 
-                      checked={emailNotifications} 
-                      onCheckedChange={handleEmailNotificationsChange}
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Full Name</Label>
+                    <Input 
+                      id="name" 
+                      value={nameInput} 
+                      onChange={(e) => setNameInput(e.target.value)} 
                     />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Public Profile</Label>
-                      <p className="text-sm text-muted-foreground">Allow others to see your quiz results</p>
-                    </div>
-                    <Switch 
-                      checked={publicProfile}
-                      onCheckedChange={handlePublicProfileChange}
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username</Label>
+                    <Input 
+                      id="username" 
+                      value={usernameInput} 
+                      onChange={(e) => setUsernameInput(e.target.value)} 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input 
+                      id="email" 
+                      type="email" 
+                      value={emailInput} 
+                      onChange={(e) => setEmailInput(e.target.value)} 
                     />
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button variant="outline" className="w-full" asChild>
-                    <Link href="/login">Change Password</Link>
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading ? "Saving..." : "Save Changes"}
                   </Button>
                 </CardFooter>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="admin" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Admin Features</CardTitle>
-                  <CardDescription>Access administrative features and tools</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">Quiz Management</CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-0 pb-2">
-                        <p className="text-sm text-muted-foreground mb-2">Create, edit, and manage quizzes.</p>
-                      </CardContent>
-                      <CardFooter className="flex flex-col space-y-2 items-start pt-0">
-                        <Button variant="outline" className="w-full" asChild>
-                          <Link href="/admin/dashboard">Admin Dashboard</Link>
-                        </Button>
-                        <Button variant="outline" className="w-full" asChild>
-                          <Link href="/admin/quizzes/create">Create New Quiz</Link>
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                    
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">Analytics</CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-0 pb-2">
-                        <p className="text-sm text-muted-foreground mb-2">View quiz performance and user statistics.</p>
-                      </CardContent>
-                      <CardFooter className="flex flex-col space-y-2 items-start pt-0">
-                        <Button variant="outline" className="w-full" asChild>
-                          <Link href="/admin/dashboard">View Statistics</Link>
-                        </Button>
-                        {profile?.stats && profile.stats.quizzesTaken > 0 && (
-                          <Button variant="outline" className="w-full" asChild>
-                            <Link href="/admin/quizzes/quiz1/analytics">Sample Quiz Analytics</Link>
-                          </Button>
-                        )}
-                      </CardFooter>
-                    </Card>
+              </form>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="stats" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Quiz Statistics</CardTitle>
+                <CardDescription>See how you've been performing</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2 p-4 border rounded-lg">
+                    <p className="text-sm text-muted-foreground">Quizzes Taken</p>
+                    <p className="text-2xl font-bold">{profile?.quizzes_taken || 0}</p>
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
-      </main>
-    </div>
-  )
+                  <div className="space-y-2 p-4 border rounded-lg">
+                    <p className="text-sm text-muted-foreground">Average Score</p>
+                    <p className="text-2xl font-bold">{profile?.average_score ? `${profile.average_score.toFixed(1)}%` : "0%"}</p>
+                  </div>
+                  <div className="space-y-2 p-4 border rounded-lg">
+                    <p className="text-sm text-muted-foreground">Total Points</p>
+                    <p className="text-2xl font-bold">{profile?.total_points || 0}</p>
+                  </div>
+                  <div className="space-y-2 p-4 border rounded-lg">
+                    <p className="text-sm text-muted-foreground">Member Since</p>
+                    <p className="text-2xl font-bold">
+                      {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : "N/A"}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="settings" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Account Settings</CardTitle>
+                <CardDescription>Manage your account preferences</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Email Notifications</Label>
+                    <p className="text-sm text-muted-foreground">Receive emails about new quizzes</p>
+                  </div>
+                  <Switch 
+                    checked={emailNotifications} 
+                    onCheckedChange={handleEmailNotificationsChange}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Public Profile</Label>
+                    <p className="text-sm text-muted-foreground">Allow others to see your quiz results</p>
+                  </div>
+                  <Switch 
+                    checked={publicProfile}
+                    onCheckedChange={handlePublicProfileChange}
+                  />
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button variant="outline" className="w-full" onClick={() => setError("Password change functionality not implemented yet")}>
+                  Change Password
+                </Button>
+              </CardFooter>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </ProtectedRoute>
+  );
 } 

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { AlertCircle, Clock } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { useAuth } from "@/components/auth/AuthProvider"
 
 // Define types
 interface QuizOption {
@@ -53,6 +54,9 @@ export default function QuizPage({ params }: { params: Promise<PageParams> }) {
   // Unwrap params using React.use()
   const unwrappedParams = React.use(params);
   const quizId = unwrappedParams.id;
+  
+  // Get auth context
+  const { user } = useAuth();
   
   const router = useRouter();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -168,8 +172,7 @@ export default function QuizPage({ params }: { params: Promise<PageParams> }) {
           totalPossible: quiz.metadata.totalPoints,
           timeSpent: timeSpent,
           answers: answers,
-          // userId would come from authentication in a real app
-          // For now, we'll allow anonymous submissions
+          userId: user?.id, // Include user ID if available
         }),
       });
 

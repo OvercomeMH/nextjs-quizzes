@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { CheckCircle2, XCircle } from "lucide-react"
+import { useAuth } from "@/components/auth/AuthProvider"
 
 // Define types
 interface QuizOption {
@@ -50,6 +51,9 @@ export default function QuizResultsPage({ params }: { params: Promise<PageParams
   // Unwrap params using React.use()
   const unwrappedParams = React.use(params);
   const quizId = unwrappedParams.id;
+  
+  // Get auth context
+  const { user } = useAuth();
   
   const searchParams = useSearchParams();
   const score = Number.parseInt(searchParams.get("score") || "0");

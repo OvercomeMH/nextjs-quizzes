@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/components/auth/AuthProvider"
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -21,6 +22,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const router = useRouter()
+  const { refreshSession } = useAuth()
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -41,57 +43,6 @@ export default function RegisterPage() {
       return
     }
 
-    setLoading(true)
-
-    try {
-      // Method 1: Using the API route we created
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: formData.username,
-          password: formData.password,
-          fullName: formData.fullName,
-          email: formData.email,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed')
-      }
-
-      // Cookie is set by Supabase automatically
-      console.log("Registration successful", data)
-      
-      // Show success message
-      setSuccess(true)
-      
-      // Redirect to dashboard after a delay
-      setTimeout(() => {
-        router.push('/dashboard')
-        router.refresh()
-      }, 5000) // Give the user 5 seconds to read the confirmation message
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Alternative approach: Direct registration with Supabase client
-  const handleDirectRegister = async () => {
-    setError('')
-    
-    // Validate passwords match
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-    
     setLoading(true)
 
     try {
@@ -120,21 +71,32 @@ export default function RegisterPage() {
             full_name: formData.fullName,
             quizzes_taken: 0,
             total_points: 0,
-            average_score: 0
+            average_score: 0,
+            email_notifications: false,
+            public_profile: false
           })
           
-        if (profileError) throw profileError
+        if (profileError) {
+          console.error('Error creating user profile:', profileError)
+          throw new Error('Failed to create user profile')
+        }
       }
 
       console.log("Registration successful")
       
-      // Redirect to dashboard
-      router.push('/dashboard')
+      // Show success message
+      setSuccess(true)
       
-      // Force a refresh to update the auth state
-      router.refresh()
+      // Refresh session
+      await refreshSession()
+      
+      // Redirect to dashboard after a delay
+      setTimeout(() => {
+        router.push('/dashboard')
+      }, 5000) // Give the user 5 seconds to read the confirmation message
     } catch (err: any) {
-      setError(err.message || 'Something went wrong')
+      console.error('Registration error:', err)
+      setError(err.message || 'Registration failed. Please try again.')
     } finally {
       setLoading(false)
     }

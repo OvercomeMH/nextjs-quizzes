@@ -82,48 +82,67 @@ export async function POST(request: Request) {
     }
     
     // 3. Update the quiz play count
-    const { error: quizUpdateError } = await supabase
-      .from('quizzes')
-      .update({ times_played: supabase.rpc('increment', { x: 1 }) })
-      .eq('id', quizId);
-      
-    if (quizUpdateError) {
-      console.error('Error updating quiz play count:', quizUpdateError);
+    try {
+      // Get the current times_played value
+      const { data: quizData, error: quizFetchError } = await supabase
+        .from('quizzes')
+        .select('times_played')
+        .eq('id', quizId)
+        .single();
+        
+      if (quizFetchError) {
+        console.error('Error fetching quiz play count:', quizFetchError);
+      } else {
+        // Increment the times_played value
+        const currentCount = quizData.times_played || 0;
+        const { error: quizUpdateError } = await supabase
+          .from('quizzes')
+          .update({ times_played: currentCount + 1 })
+          .eq('id', quizId);
+          
+        if (quizUpdateError) {
+          console.error('Error updating quiz play count:', quizUpdateError);
+        }
+      }
+    } catch (err) {
+      console.error('Error updating quiz play count:', err);
     }
     
     // 4. If we have a user ID, update their stats
     if (userId) {
-      const { error: userUpdateError } = await supabase
-        .from('users')
-        .update({ 
-          quizzes_taken: supabase.rpc('increment', { x: 1 }),
-          total_points: supabase.rpc('increment', { x: score })
-        })
-        .eq('id', userId);
-        
-      if (userUpdateError) {
-        console.error('Error updating user stats:', userUpdateError);
-      }
-      
-      // Calculate new average score
-      const { data: userData, error: userFetchError } = await supabase
-        .from('users')
-        .select('quizzes_taken, total_points')
-        .eq('id', userId)
-        .single();
-      
-      if (userFetchError) {
-        console.error('Error fetching user data:', userFetchError);
-      } else if (userData) {
-        const newAverage = userData.total_points / userData.quizzes_taken;
-        const { error: averageUpdateError } = await supabase
+      try {
+        // Get current user stats
+        const { data: userData, error: userFetchError } = await supabase
           .from('users')
-          .update({ average_score: newAverage })
-          .eq('id', userId);
+          .select('quizzes_taken, total_points')
+          .eq('id', userId)
+          .single();
+        
+        if (userFetchError) {
+          console.error('Error fetching user data:', userFetchError);
+        } else {
+          // Update user stats with incremented values
+          const newQuizzesTaken = (userData.quizzes_taken || 0) + 1;
+          const newTotalPoints = (userData.total_points || 0) + score;
           
-        if (averageUpdateError) {
-          console.error('Error updating average score:', averageUpdateError);
+          // Calculate new average
+          const newAverage = newTotalPoints / newQuizzesTaken;
+          
+          const { error: userUpdateError } = await supabase
+            .from('users')
+            .update({ 
+              quizzes_taken: newQuizzesTaken,
+              total_points: newTotalPoints,
+              average_score: newAverage
+            })
+            .eq('id', userId);
+            
+          if (userUpdateError) {
+            console.error('Error updating user stats:', userUpdateError);
+          }
         }
+      } catch (err) {
+        console.error('Error updating user stats:', err);
       }
     }
     

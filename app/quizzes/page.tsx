@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge"
 // Import the supabase client
 import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/components/auth/AuthProvider"
 
 // Define the quiz type based on the Supabase table structure
 interface Quiz {
@@ -23,6 +24,7 @@ interface Quiz {
 }
 
 export default function QuizzesPage() {
+  const { user } = useAuth();
   const [quizzes, setQuizzes] = useState<Quiz[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -83,73 +85,67 @@ export default function QuizzesPage() {
   }, [])
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b">
-        <div className="container flex h-16 items-center justify-between py-4">
-          <div className="flex items-center gap-2">
-            <Link href="/" className="font-bold">
-              QuizMaster
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Available Quizzes</h1>
+        <div className="flex gap-4">
+          <Link href="/dashboard">
+            <Button variant="outline">Dashboard</Button>
+          </Link>
+          {user && (
+            <Link href="/profile">
+              <Button variant="outline">Profile</Button>
             </Link>
-          </div>
-          <nav className="flex items-center gap-4">
-            <Link href="/dashboard" className="text-sm font-medium hover:underline">
-              Dashboard
+          )}
+          {!user && (
+            <Link href="/login">
+              <Button variant="outline">Login</Button>
             </Link>
-            <Link href="/profile" className="text-sm font-medium hover:underline">
-              Profile
-            </Link>
-            <Link href="/admin/dashboard" className="text-sm font-medium hover:underline">
-              Admin
-            </Link>
-          </nav>
+          )}
         </div>
-      </header>
+      </div>
 
-      <main className="flex-1 container py-6">
-        <h1 className="text-2xl font-bold mb-6">All Quizzes</h1>
-        
-        {/* Add debug info for development */}
-        <div className="mb-4 p-2 bg-gray-100 text-sm rounded">
-          <p>Debug: {debugInfo}</p>
+      {/* Add debug info for development */}
+      <div className="mb-4 p-2 bg-gray-100 text-sm rounded">
+        <p>Debug: {debugInfo}</p>
+      </div>
+      
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <p>Loading quizzes from Supabase...</p>
         </div>
-        
-        {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <p>Loading quizzes from Supabase...</p>
-          </div>
-        ) : error ? (
-          <div className="flex justify-center items-center h-64">
-            <p className="text-red-500">{error}</p>
-          </div>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {quizzes.length > 0 ? (
-              quizzes.map(quiz => (
-                <Card key={quiz.id}>
-                  <CardHeader>
-                    <CardTitle>{quiz.title}</CardTitle>
-                    <CardDescription>{quiz.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      <Badge variant="outline">{quiz.difficulty}</Badge>
-                      <Badge variant="outline">{quiz.totalQuestions} Questions</Badge>
-                      <Badge variant="outline">{quiz.metadata.totalPoints} Points</Badge>
-                    </div>
-                    <Button className="w-full" asChild>
-                      <Link href={`/quizzes/${quiz.id}`}>Start Quiz</Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <div className="col-span-3 text-center py-10">
-                <p>No quizzes available at the moment.</p>
-              </div>
-            )}
-          </div>
-        )}
-      </main>
+      ) : error ? (
+        <div className="flex justify-center items-center h-64">
+          <p className="text-red-500">{error}</p>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {quizzes.length > 0 ? (
+            quizzes.map(quiz => (
+              <Card key={quiz.id}>
+                <CardHeader>
+                  <CardTitle>{quiz.title}</CardTitle>
+                  <CardDescription>{quiz.description}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <Badge variant="outline">{quiz.difficulty}</Badge>
+                    <Badge variant="outline">{quiz.totalQuestions} Questions</Badge>
+                    <Badge variant="outline">{quiz.metadata.totalPoints} Points</Badge>
+                  </div>
+                  <Button className="w-full" asChild>
+                    <Link href={`/quizzes/${quiz.id}`}>Start Quiz</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <div className="col-span-3 text-center py-10">
+              <p>No quizzes available at the moment.</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 } 

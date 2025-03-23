@@ -1,0 +1,3 @@
+id,title,description,difficulty,category,time_limit,created_at,updated_at,total_questions,total_points,average_rating,times_played
+49e14190-2aca-48b6-b79e-115a0a8b8d85,Basic Programming Concepts,Test your knowledge of fundamental programming concepts,beginner,,600,2024-01-20 12:00:00+00,2024-01-20 12:00:00+00,4,40,4.5,1
+d2953f78-08cf-4a84-bdd0-3558b9be7440,Chess Fundamentals,Test your knowledge of basic chess concepts and rules,beginner,,600,2024-01-20 12:00:00+00,2024-01-20 12:00:00+00,4,40,4.5,1

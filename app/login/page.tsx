@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/components/auth/AuthProvider"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -16,6 +17,7 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const { refreshSession } = useAuth()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -23,42 +25,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      // Method 1: Using the API route we created
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "Login failed")
-      }
-
-      // The cookie is set by Supabase automatically
-      console.log("Login successful", data)
-      
-      // Redirect to dashboard
-      router.push("/dashboard")
-      
-      // Force a refresh to update the auth state
-      router.refresh()
-    } catch (err: any) {
-      setError(err.message || "Something went wrong")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Alternative approach: Direct login with Supabase client
-  const handleDirectLogin = async () => {
-    setError("")
-    setLoading(true)
-
-    try {
+      // Use direct Supabase client for more reliable login
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -68,15 +35,16 @@ export default function LoginPage() {
         throw error
       }
 
-      console.log("Direct login successful", data)
+      console.log("Login successful", data)
+      
+      // Refresh the auth session in the provider
+      await refreshSession()
       
       // Redirect to dashboard
       router.push("/dashboard")
-      
-      // Force a refresh to update the auth state
-      router.refresh()
     } catch (err: any) {
-      setError(err.message || "Something went wrong")
+      console.error("Login error:", err)
+      setError(err.message || "Login failed. Please check your credentials and try again.")
     } finally {
       setLoading(false)
     }
