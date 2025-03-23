@@ -12,8 +12,18 @@ import { ArrowLeft } from 'lucide-react';
 import { useMemo } from 'react';
 
 // Define types for our data
+type Quiz = Database['public']['Tables']['quizzes']['Row'];
 type Submission = Database['public']['Tables']['submissions']['Row'];
 type User = Database['public']['Tables']['users']['Row'];
+
+// Define types for joined data
+type SubmissionWithUser = Submission & {
+  users: User;
+};
+
+type QuizWithData = Quiz & {
+  submissions: SubmissionWithUser[];
+};
 
 interface QuestionStat {
   id: string;
@@ -48,62 +58,69 @@ export default function QuizAnalyticsPage({ params }: { params: Promise<{ id: st
   const quizId = unwrappedParams.id;
 
   // Fetch quiz data with joined submissions and users
-  const { data: quiz, loading, error } = useDataFetching<'quizzes', [], [], [
+  const { data: quizData, loading, error } = useDataFetching<'quizzes', [], [], [
     {
       table: 'submissions',
       on: 'quiz_id',
+      select: '*',
       orderBy: { column: 'created_at', ascending: false }
     },
     {
       table: 'users',
-      on: 'user_id'
+      on: 'user_id',
+      select: '*'
     }
   ]>({
     table: 'quizzes',
+    select: `
+      id,
+      title,
+      description,
+      created_at,
+      submissions (
+        id,
+        score,
+        total_possible,
+        time_spent,
+        created_at,
+        user_id,
+        users (
+          id,
+          full_name,
+          email
+        )
+      )
+    `,
     filter: { column: 'id', operator: 'eq', value: quizId }
   });
 
-  // Show loading state
-  if (loading) {
-    return (
-      <AdminLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
-        </div>
-      </AdminLayout>
-    );
-  }
-
-  // Show error state
-  if (error) {
-    return (
-      <AdminLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center text-red-500">{error}</div>
-        </div>
-      </AdminLayout>
-    );
-  }
-
-  // Show not found state
-  if (!quiz) {
-    return (
-      <AdminLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center text-gray-500">Quiz not found</div>
-        </div>
-      </AdminLayout>
-    );
-  }
+  // Add debug logging
+  console.log('Quiz data:', quizData);
 
   // Process analytics data
   const analyticsData = useMemo(() => {
-    const submissions = quiz.submissions || [];
-    const users = quiz.users || [];
+    if (!quizData || !Array.isArray(quizData) || quizData.length === 0) {
+      return {
+        quiz: null,
+        totalSubmissions: 0,
+        averageScore: 0,
+        scoreDistribution: [],
+        submissionsOverTime: [],
+        recentSubmissions: [],
+        questionStats: [],
+        completionTime: [],
+        completionTimeScatter: []
+      };
+    }
+
+    const quiz = quizData[0] as QuizWithData;
+    const submissions = Array.isArray(quiz.submissions) ? quiz.submissions : [];
+
+    console.log('Processing submissions:', submissions);
 
     // Calculate score distribution
     const scoreCounts: Record<number, number> = {};
-    submissions.forEach((sub: Submission) => {
+    submissions.forEach((sub: SubmissionWithUser) => {
       const score = Math.round((sub.score / sub.total_possible) * 100);
       scoreCounts[score] = (scoreCounts[score] || 0) + 1;
     });
@@ -114,7 +131,7 @@ export default function QuizAnalyticsPage({ params }: { params: Promise<{ id: st
 
     // Calculate submissions over time
     const dateCounts: Record<string, number> = {};
-    submissions.forEach((sub: Submission) => {
+    submissions.forEach((sub: SubmissionWithUser) => {
       if (sub.created_at) {
         const date = new Date(sub.created_at).toISOString().split('T')[0];
         dateCounts[date] = (dateCounts[date] || 0) + 1;
@@ -126,12 +143,11 @@ export default function QuizAnalyticsPage({ params }: { params: Promise<{ id: st
     }));
 
     // Format recent submissions
-    const recentSubmissions = submissions.slice(0, 10).map((sub: Submission) => {
-      const user = users.find((u: User) => u.id === sub.user_id);
+    const recentSubmissions = submissions.slice(0, 10).map((sub: SubmissionWithUser) => {
       const percentage = Math.round((sub.score / sub.total_possible) * 100);
       return {
         id: sub.id,
-        user: user?.full_name || 'Anonymous',
+        user: sub.users?.full_name || 'Anonymous',
         score: `${sub.score}/${sub.total_possible}`,
         percentage,
         time: sub.time_spent ? `${Math.round(sub.time_spent / 60)}m ${sub.time_spent % 60}s` : 'N/A',
@@ -144,7 +160,7 @@ export default function QuizAnalyticsPage({ params }: { params: Promise<{ id: st
       totalSubmissions: submissions.length,
       averageScore: submissions.length > 0
         ? Math.round(
-            submissions.reduce((acc: number, sub: Submission) => 
+            submissions.reduce((acc: number, sub: SubmissionWithUser) => 
               acc + (sub.score / sub.total_possible), 0) /
             submissions.length *
             100
@@ -153,12 +169,46 @@ export default function QuizAnalyticsPage({ params }: { params: Promise<{ id: st
       scoreDistribution,
       submissionsOverTime,
       recentSubmissions,
-      questionStats: [], // This will be populated by the API
-      completionTime: [], // This will be populated by the API
-      completionTimeScatter: [] // This will be populated by the API
+      questionStats: [],
+      completionTime: [],
+      completionTimeScatter: []
     };
-  }, [quiz]);
+  }, [quizData]);
 
+  // Render loading state
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  // Render error state
+  if (error) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center text-red-500">{error}</div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  // Render not found state
+  if (!analyticsData.quiz) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center text-gray-500">Quiz not found</div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  // Render main content
   return (
     <AdminLayout>
       <div className="max-w-6xl mx-auto">

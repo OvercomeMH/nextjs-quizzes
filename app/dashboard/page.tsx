@@ -18,6 +18,9 @@ type SubmissionWithQuiz = TableRow<'submissions'> & {
   quizzes: Pick<TableRow<'quizzes'>, 'id' | 'title'> | null;
 };
 
+// Define types for quiz data
+type Quiz = TableRow<'quizzes'>;
+
 export default function DashboardPage() {
   const { user, signOut } = useAuth();
   
@@ -66,6 +69,14 @@ export default function DashboardPage() {
   const isLoading = profileLoading || submissionsLoading || quizzesLoading;
   const error = profileError || submissionsError || quizzesError;
 
+  // Calculate average score from submissions
+  const averageScore = recentSubmissions.length > 0
+    ? Math.round(
+        (recentSubmissions.reduce((acc, sub) => acc + sub.score, 0) /
+         recentSubmissions.reduce((acc, sub) => acc + sub.total_possible, 0)) * 100
+      )
+    : 0;
+
   return (
     <ProtectedRoute>
       <div className="container mx-auto px-4 py-8">
@@ -102,18 +113,18 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Total Points</p>
-                    <p className="font-medium">{profile?.total_points || 0}</p>
+                    <p className="font-medium">
+                      {recentSubmissions.reduce((acc, sub) => acc + sub.score, 0)} / {recentSubmissions.reduce((acc, sub) => acc + sub.total_possible, 0)}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Quizzes Taken</p>
-                    <p className="font-medium">{profile?.quizzes_taken || 0}</p>
+                    <p className="font-medium">{recentSubmissions.length}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Average Score</p>
                     <div className="text-2xl font-bold">
-                      {profile?.quizzes_taken && profile?.total_points
-                        ? `${((profile.total_points / (profile.quizzes_taken * 100)) * 100).toFixed(1)}%`
-                        : 'N/A'}
+                      {recentSubmissions.length > 0 ? `${averageScore}%` : 'N/A'}
                     </div>
                   </div>
                 </div>
@@ -158,7 +169,7 @@ export default function DashboardPage() {
               <CardContent>
                 <div className="space-y-4">
                   {availableQuizzes.length > 0 ? (
-                    availableQuizzes.map((quiz) => (
+                    availableQuizzes.map((quiz: Quiz) => (
                       <div key={quiz.id} className="flex items-center justify-between">
                         <div>
                           <p className="font-medium">{quiz.title}</p>

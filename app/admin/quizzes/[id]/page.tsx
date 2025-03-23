@@ -20,21 +20,51 @@ export default function QuizDetailsPage({ params }: { params: Promise<{ id: stri
   const quizId = unwrappedParams.id;
 
   // Fetch quiz data with joined questions and submissions
-  const { data: quiz, loading, error } = useDataFetching<'quizzes', [], [], [
+  const { data: quizData, loading, error } = useDataFetching<'quizzes', [], [], [
     {
       table: 'questions',
       on: 'quiz_id',
+      select: '*',
       orderBy: { column: 'order_num', ascending: true }
     },
     {
       table: 'submissions',
       on: 'quiz_id',
+      select: '*',
       orderBy: { column: 'created_at', ascending: false }
     }
   ]>({
     table: 'quizzes',
+    select: `
+      id,
+      title,
+      description,
+      difficulty,
+      category,
+      time_limit,
+      created_at,
+      total_points,
+      total_questions,
+      questions (
+        id,
+        text,
+        type,
+        points,
+        correct_answer,
+        order_num
+      ),
+      submissions (
+        id,
+        score,
+        total_possible,
+        created_at
+      )
+    `,
     filter: { column: 'id', operator: 'eq', value: quizId }
   });
+
+  // Add debug logging
+  console.log('Quiz data:', quizData);
 
   // Show loading state
   if (loading) {
@@ -57,6 +87,8 @@ export default function QuizDetailsPage({ params }: { params: Promise<{ id: stri
       </AdminLayout>
     );
   }
+
+  const quiz = quizData?.[0];
 
   // Show not found state
   if (!quiz) {

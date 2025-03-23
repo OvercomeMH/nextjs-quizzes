@@ -14,12 +14,12 @@ export default function Navigation() {
     {
       name: "Home",
       href: "/",
-      auth: false // visible to everyone
+      auth: null // only visible when NOT logged in
     },
     {
       name: "Quizzes",
       href: "/quizzes",
-      auth: false // visible to everyone
+      auth: true // only visible to authenticated users
     },
     {
       name: "Dashboard",
@@ -42,15 +42,20 @@ export default function Navigation() {
     <header className="sticky top-0 z-50 w-full border-b bg-background">
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-2">
-          <Link href="/" className="text-xl font-bold">
+          <Link 
+            href={user ? "/dashboard" : "/"} 
+            className="text-xl font-bold"
+          >
             QuizMaster
           </Link>
         </div>
         
         <nav className="hidden md:flex gap-6">
           {navLinks.map((link) => {
-            // Only show links based on auth state
-            if (link.auth && !user) return null;
+            // Show link if:
+            // - auth is true AND user is logged in
+            // - auth is null AND user is NOT logged in
+            if ((link.auth === true && !user) || (link.auth === null && user)) return null;
             
             const isActive = pathname === link.href;
             return (

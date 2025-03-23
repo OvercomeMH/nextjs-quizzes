@@ -38,17 +38,18 @@ export async function middleware(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
 
   // Public paths that don't require authentication
-  const publicPaths = ['/login', '/auth/callback']
+  const publicPaths = ['/', '/login', '/auth/callback']
   const isPublicPath = publicPaths.includes(request.nextUrl.pathname)
+  const isHomePage = request.nextUrl.pathname === '/'
 
   if (!session && !isPublicPath) {
     // No session and trying to access protected route
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (session && isPublicPath) {
-    // Has session but trying to access public route (like login)
-    return NextResponse.redirect(new URL('/', request.url))
+  if (session && isPublicPath && !isHomePage) {
+    // Has session and trying to access public route (except home)
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   return response

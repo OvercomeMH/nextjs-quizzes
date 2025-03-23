@@ -25,12 +25,27 @@ export default function QuizzesPage() {
   const { data: quizzes, loading, error } = useDataFetching<'quizzes', [], [], [
     {
       table: 'submissions',
-      on: 'quiz_id'
+      on: 'quiz_id',
+      select: '*'
     }
   ]>({
     table: 'quizzes',
+    select: `
+      id,
+      title,
+      description,
+      created_at,
+      submissions (
+        id,
+        score,
+        total_possible
+      )
+    `,
     orderBy: { column: 'created_at', ascending: false }
   });
+
+  // Add debug logging
+  console.log('Quizzes data:', quizzes);
 
   // Filter quizzes based on search query
   const filteredQuizzes = Array.isArray(quizzes) 
@@ -40,9 +55,10 @@ export default function QuizzesPage() {
       )
     : [];
 
-  // Helper function to get submission count
+  // Helper function to get submission count with debug logging
   const getSubmissionCount = (quiz: QuizWithSubmissions) => {
-    return quiz.submissions?.length || 0;
+    console.log('Quiz submissions:', quiz.submissions);
+    return Array.isArray(quiz.submissions) ? quiz.submissions.length : 0;
   };
 
   return (

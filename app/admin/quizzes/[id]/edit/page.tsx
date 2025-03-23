@@ -90,48 +90,81 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
     {
       table: 'questions',
       on: 'quiz_id',
+      select: '*',
       orderBy: { column: 'order_num', ascending: true }
     },
     {
       table: 'question_possible_answers',
       on: 'question_id',
+      select: '*',
       orderBy: { column: 'order_num', ascending: true }
     }
   ]>({
     table: 'quizzes',
+    select: `
+      id,
+      title,
+      description,
+      difficulty,
+      category,
+      time_limit,
+      created_at,
+      questions (
+        id,
+        text,
+        type,
+        points,
+        correct_answer,
+        order_num,
+        question_possible_answers (
+          id,
+          text,
+          option_id,
+          question_id,
+          order_num
+        )
+      )
+    `,
     filter: { column: 'id', operator: 'eq', value: quizId }
   });
 
+  // Add debug logging
+  console.log('Quiz data:', quizData);
+
   // Update form when quiz data changes
   useEffect(() => {
-    if (quizData?.[0]) {
-      const quiz = quizData[0] as QuizWithDetails;
-      setQuizTitle(quiz.title);
-      setQuizDescription(quiz.description || '');
-      setCategory(quiz.category || '');
-      setDifficulty(quiz.difficulty);
-      setTimeLimit(Math.round((quiz.time_limit || 600) / 60).toString()); // Convert seconds to minutes
+    if (!quizData || !quizData[0] || !quizData[0].questions) {
+      console.log('No quiz data or questions found');
+      return;
+    }
 
-      // Format questions for our UI
-      const formattedQuestions: QuizFormQuestion[] = quiz.questions.map((question: Question & { question_possible_answers: QuestionOption[] }, index: number) => ({
-        id: question.id,
-        text: question.text,
-        type: question.type || 'multiple_choice',
-        options: question.question_possible_answers.map((option: QuestionOption) => ({
-          id: option.option_id,
-          text: option.text,
-          question_id: option.question_id,
-          order_num: option.order_num || 0
-        })),
-        correct_answer: question.correct_answer,
-        points: question.points || 10,
-        order_num: question.order_num || index
-      }));
+    const quiz = quizData[0] as QuizWithDetails;
+    console.log('Processing quiz:', quiz);
+    setQuizTitle(quiz.title);
+    setQuizDescription(quiz.description || '');
+    setCategory(quiz.category || '');
+    setDifficulty(quiz.difficulty);
+    setTimeLimit(Math.round((quiz.time_limit || 600) / 60).toString()); // Convert seconds to minutes
 
-      // Set questions if we found any, otherwise keep the default empty question
-      if (formattedQuestions.length > 0) {
-        setQuestions(formattedQuestions);
-      }
+    // Format questions for our UI
+    const formattedQuestions: QuizFormQuestion[] = quiz.questions.map((question: Question & { question_possible_answers: QuestionOption[] }, index: number) => ({
+      id: question.id,
+      text: question.text,
+      type: question.type || 'multiple_choice',
+      options: question.question_possible_answers.map((option: QuestionOption) => ({
+        id: option.option_id,
+        text: option.text,
+        question_id: option.question_id,
+        order_num: option.order_num || 0
+      })),
+      correct_answer: question.correct_answer,
+      points: question.points || 10,
+      order_num: question.order_num || index
+    }));
+
+    // Set questions if we found any, otherwise keep the default empty question
+    if (formattedQuestions.length > 0) {
+      setQuestions(formattedQuestions);
     }
   }, [quizData]);
 
@@ -273,8 +306,7 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
               type: question.type,
               correct_answer: question.correct_answer,
               points: question.points,
-              order_num: question.order_num,
-              updated_at: new Date().toISOString()
+              order_num: question.order_num
             })
             .eq('id', question.id);
             
@@ -287,8 +319,7 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
                 .from('question_possible_answers')
                 .update({
                   text: option.text,
-                  order_num: option.order_num,
-                  updated_at: new Date().toISOString()
+                  order_num: option.order_num
                 })
                 .eq('question_id', question.id)
                 .eq('option_id', option.id);
@@ -322,8 +353,7 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
                 question_id: newQuestion.id,
                 option_id: option.id,
                 text: option.text,
-                order_num: index,
-                created_at: new Date().toISOString()
+                order_num: index
               });
               
             if (optionError) throw optionError;

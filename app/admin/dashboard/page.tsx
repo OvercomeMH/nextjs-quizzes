@@ -45,10 +45,20 @@ export default function AdminDashboard() {
   const { data: quizzes, loading: loadingQuizzes, error: quizzesError } = useDataFetching<'quizzes', [], [], [
     {
       table: 'submissions',
-      on: 'quiz_id'
+      on: 'quiz_id',
+      select: '*'
     }
   ]>({
     table: 'quizzes',
+    select: `
+      id,
+      title,
+      submissions (
+        id,
+        score,
+        total_possible
+      )
+    `,
     refreshInterval: 60000, // Refresh every minute
     revalidateOnFocus: true
   });
@@ -83,17 +93,28 @@ export default function AdminDashboard() {
     totalUsers: Array.isArray(users) ? users.length : 0,
     totalSubmissions: Array.isArray(submissions) ? submissions.length : 0,
     averageScore: Array.isArray(submissions) && submissions.length > 0 
-      ? submissions.reduce((acc: number, sub: Submission) => acc + (sub.score / sub.total_possible) * 100, 0) / submissions.length 
+      ? Math.round(
+          (submissions.reduce((acc, sub) => acc + sub.score, 0) / 
+           submissions.reduce((acc, sub) => acc + sub.total_possible, 0)) * 100
+        )
       : 0
   };
 
-  // Process submissions chart data
+  // Log the final average
+  console.log(`Total submissions: ${submissions?.length}, Average score: ${stats.averageScore}%`);
+
+  // Process submissions chart data with better error handling
   const submissionsChartData = Array.isArray(quizzes) 
-    ? quizzes.map((quiz: QuizWithSubmissions) => ({
-        name: quiz.title,
-        submissions: quiz.submissions?.length || 0
-      }))
+    ? quizzes.map((quiz: QuizWithSubmissions) => {
+        console.log('Processing quiz:', quiz.title, 'Submissions:', quiz.submissions);
+        return {
+          name: quiz.title,
+          submissions: Array.isArray(quiz.submissions) ? quiz.submissions.length : 0
+        };
+      })
     : [];
+
+  console.log('Chart data:', submissionsChartData);
 
   // Process recent activity
   const activity = Array.isArray(submissions) 
@@ -158,7 +179,7 @@ export default function AdminDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {stats.averageScore > 0 ? `${stats.averageScore.toFixed(1)}%` : "N/A"}
+                    {stats.averageScore > 0 ? `${stats.averageScore}%` : "N/A"}
                   </div>
                 </CardContent>
               </Card>
