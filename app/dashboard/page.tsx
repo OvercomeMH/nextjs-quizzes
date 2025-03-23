@@ -1,150 +1,70 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { useAuth } from "@/components/auth/AuthProvider"
 import ProtectedRoute from "@/components/auth/ProtectedRoute"
-import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { User, QuizSummary, Submission } from "@/types/database"
+import { useDataFetching } from "@/hooks/useDataFetching"
+import type { TableRow } from "@/lib/supabase"
 
-// Define interfaces for type safety
-interface Quiz {
-  id: string;
-  title: string;
-  description: string;
-  difficulty: string;
-  metadata: {
-    totalQuestions: number;
-    totalPoints: number;
-    timesPlayed: number;
-    averageRating: number;
-  };
-}
-
-interface CompletedQuiz {
-  id: string;
-  title: string;
-  score: number;
-  totalQuestions: number;
-  completedAt: string;
-}
-
-// Define user profile data type
-type UserProfile = {
-  id: string;
-  username: string;
-  full_name: string;
-  email: string;
-  quizzes_taken: number;
-  total_points: number;
-  average_score: number;
-  created_at?: string;
+// Define a type for submissions with joined quiz data
+type SubmissionWithQuiz = TableRow<'submissions'> & {
+  quizzes: Pick<TableRow<'quizzes'>, 'id' | 'title'> | null;
 };
 
 export default function DashboardPage() {
   const { user, signOut } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [recentSubmissions, setRecentSubmissions] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [quizzes, setQuizzes] = useState<Quiz[]>([])
-  const [completedQuizzes, setCompletedQuizzes] = useState<CompletedQuiz[]>([])
+  
+  // Fetch user profile
+  const { data: profileData, loading: profileLoading, error: profileError } = useDataFetching<'users'>({
+    table: 'users',
+    select: '*',
+    orderBy: { column: 'created_at', ascending: false }
+  });
+  
+  const profile = profileData[0] || null;
 
-  const fetchUserData = async () => {
-    if (!user) return;
-    
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      // Fetch user profile
-      const { data: profileData, error: profileError } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-        
-      if (profileError) throw profileError;
-      setProfile(profileData);
-      
-      // Fetch recent submissions
-      const { data: submissionsData, error: submissionsError } = await supabase
-        .from("submissions")
-        .select(`
-          id,
-          score,
-          total_possible,
-          time_spent,
-          created_at,
-          quizzes:quiz_id (
-            id,
-            title
-          )
-        `)
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(5);
-        
-      if (submissionsError) throw submissionsError;
-      setRecentSubmissions(submissionsData || []);
-      
-    } catch (err: any) {
-      console.error("Error fetching user data:", err);
-      setError(err.message || "Failed to load user data");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Fetch recent submissions
+  const { data: submissionsData, loading: submissionsLoading, error: submissionsError } = useDataFetching<'submissions'>({
+    table: 'submissions',
+    select: `
+      id,
+      score,
+      total_possible,
+      time_spent,
+      created_at,
+      quizzes:quiz_id (
+        id,
+        title
+      )
+    `,
+    orderBy: { column: 'created_at', ascending: false }
+  });
 
-  useEffect(() => {
-    if (user) {
-      fetchUserData();
-    }
-  }, [user]);
+  const recentSubmissions = submissionsData as unknown as SubmissionWithQuiz[];
+
+  // Fetch available quizzes
+  const { data: quizzes, loading: quizzesLoading, error: quizzesError } = useDataFetching<'quizzes'>({
+    table: 'quizzes',
+    select: 'id, title, description, difficulty, total_questions, average_rating',
+    orderBy: { column: 'created_at', ascending: false }
+  });
+
+  const availableQuizzes = quizzes;
 
   const handleSignOut = async () => {
     await signOut();
   };
 
-  useEffect(() => {
-    const fetchQuizzes = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch('/api/quizzes');
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch quizzes');
-        }
-        
-        const data = await response.json();
-        setQuizzes(data);
-        
-        // For now, we'll use hardcoded completed quizzes
-        // In a real app, you would fetch this from an API
-        setCompletedQuizzes([
-          {
-            id: "completed1",
-            title: "HTML and CSS Basics",
-            score: 8,
-            totalQuestions: 10,
-            completedAt: "2023-05-15",
-          },
-        ]);
-        
-        setIsLoading(false);
-      } catch (err) {
-        console.error("Error fetching quizzes:", err);
-        setError("Failed to load quizzes. Please try again later.");
-        setIsLoading(false);
-      }
-    };
-    
-    fetchQuizzes();
-  }, [])
+  // Calculate loading and error states
+  const isLoading = profileLoading || submissionsLoading || quizzesLoading;
+  const error = profileError || submissionsError || quizzesError;
 
   return (
     <ProtectedRoute>
@@ -152,110 +72,110 @@ export default function DashboardPage() {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <div className="flex gap-4">
-            <Link href="/quizzes">
-              <Button variant="outline">Browse Quizzes</Button>
-            </Link>
-            <Button onClick={handleSignOut} variant="destructive">Sign Out</Button>
+            <Button variant="outline" onClick={handleSignOut}>
+              Sign Out
+            </Button>
           </div>
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-12 h-12 border-4 border-t-blue-500 border-blue-200 rounded-full animate-spin"></div>
+          <div className="flex justify-center items-center h-64">
+            <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
           </div>
         ) : error ? (
-          <div className="p-4 bg-red-100 text-red-700 rounded-md mb-6">
-            {error}
+          <div className="flex justify-center items-center h-64">
+            <p className="text-red-500">{error}</p>
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* User Profile Card */}
-            <Card>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {/* Profile Card */}
+            <Card className="md:col-span-2 lg:col-span-1">
               <CardHeader>
                 <CardTitle>Profile</CardTitle>
-                <CardDescription>Your personal information</CardDescription>
+                <CardDescription>Your quiz statistics</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <span className="font-semibold">Username:</span> {profile?.username}
-                </div>
-                <div>
-                  <span className="font-semibold">Name:</span> {profile?.full_name}
-                </div>
-                <div>
-                  <span className="font-semibold">Email:</span> {profile?.email}
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Username</p>
+                    <p className="font-medium">{profile?.username}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Points</p>
+                    <p className="font-medium">{profile?.total_points || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Quizzes Taken</p>
+                    <p className="font-medium">{profile?.quizzes_taken || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Average Score</p>
+                    <p className="font-medium">
+                      {profile?.quizzes_taken && profile?.total_points
+                        ? ((profile.total_points / (profile.quizzes_taken * 100)) * 100).toFixed(1) + '%'
+                        : '0%'}
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Stats Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Statistics</CardTitle>
-                <CardDescription>Your quiz activity</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <span className="font-semibold">Quizzes Taken:</span> {profile?.quizzes_taken || 0}
-                </div>
-                <div>
-                  <span className="font-semibold">Total Points:</span> {profile?.total_points || 0}
-                </div>
-                <div>
-                  <span className="font-semibold">Average Score:</span> {profile?.average_score?.toFixed(1) || 0}%
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Recent Activity */}
+            {/* Recent Activity Card */}
             <Card className="md:col-span-2">
               <CardHeader>
                 <CardTitle>Recent Activity</CardTitle>
-                <CardDescription>Your latest quiz submissions</CardDescription>
+                <CardDescription>Your latest quiz attempts</CardDescription>
               </CardHeader>
               <CardContent>
-                {recentSubmissions.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full table-auto">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="px-4 py-2 text-left">Quiz</th>
-                          <th className="px-4 py-2 text-left">Score</th>
-                          <th className="px-4 py-2 text-left">Time Spent</th>
-                          <th className="px-4 py-2 text-left">Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {recentSubmissions.map((submission) => (
-                          <tr key={submission.id} className="border-b">
-                            <td className="px-4 py-2">
-                              <Link href={`/quizzes/${submission.quizzes.id}`} className="text-blue-500 hover:underline">
-                                {submission.quizzes.title}
-                              </Link>
-                            </td>
-                            <td className="px-4 py-2">
-                              {submission.score}/{submission.total_possible} ({((submission.score / submission.total_possible) * 100).toFixed(0)}%)
-                            </td>
-                            <td className="px-4 py-2">
-                              {Math.floor(submission.time_spent / 60)}m {submission.time_spent % 60}s
-                            </td>
-                            <td className="px-4 py-2">
-                              {new Date(submission.created_at).toLocaleDateString()}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="text-gray-500">You haven't taken any quizzes yet.</p>
-                )}
+                <div className="space-y-4">
+                  {recentSubmissions.length > 0 ? (
+                    recentSubmissions.map((submission) => (
+                      <div key={submission.id} className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{submission.quizzes?.title}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Score: {submission.score}/{submission.total_possible}
+                          </p>
+                        </div>
+                        <Badge variant="outline">
+                          {new Date(submission.created_at || '').toLocaleDateString()}
+                        </Badge>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground">No recent activity</p>
+                  )}
+                </div>
               </CardContent>
-              <CardFooter>
-                <Link href="/quizzes">
-                  <Button variant="outline">Take a Quiz</Button>
-                </Link>
-              </CardFooter>
+            </Card>
+
+            {/* Available Quizzes Card */}
+            <Card className="md:col-span-2 lg:col-span-1">
+              <CardHeader>
+                <CardTitle>Available Quizzes</CardTitle>
+                <CardDescription>Quizzes you haven't taken yet</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {availableQuizzes.length > 0 ? (
+                    availableQuizzes.map((quiz) => (
+                      <div key={quiz.id} className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{quiz.title}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {quiz.total_questions} questions • {quiz.difficulty}
+                          </p>
+                        </div>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/quizzes/${quiz.id}`}>Start</Link>
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground">No quizzes available</p>
+                  )}
+                </div>
+              </CardContent>
             </Card>
           </div>
         )}

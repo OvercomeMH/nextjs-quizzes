@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -12,15 +12,19 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
 import { CalendarIcon } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { User, Quiz, Submission } from "@/types/database"
+import { useDataFetching } from "@/hooks/useDataFetching"
+
+// Define activity types
+type ActivityType = 'submission' | 'registration' | 'quiz_creation';
 
 interface ActivityItem {
   id: string;
-  type: 'submission' | 'registration' | 'quiz_creation';
+  type: ActivityType;
   title: string;
   details: string;
-  time: string;
   timestamp: string;
-  color: string;
   user_id?: string;
   quiz_id?: string;
 }
@@ -33,67 +37,129 @@ interface PaginationData {
 }
 
 export default function ActivityPage() {
-  const [activities, setActivities] = useState<ActivityItem[]>([])
   const [pagination, setPagination] = useState<PaginationData>({
     page: 1,
     limit: 20,
     total: 0,
     totalPages: 0
   })
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   
   // Filter states
-  const [activityType, setActivityType] = useState<string>("all")
+  const [activityType, setActivityType] = useState<ActivityType | 'all'>("all")
   const [startDate, setStartDate] = useState<Date | undefined>(undefined)
   const [endDate, setEndDate] = useState<Date | undefined>(undefined)
 
-  // Function to fetch activities with filters
-  const fetchActivities = async (page = 1) => {
-    try {
-      setLoading(true)
+  // Fetch activities using our hook
+  const { data: submissions, loading: loadingSubmissions } = useDataFetching<'submissions'>({
+    table: 'submissions',
+    select: 'id, user_id, quiz_id, created_at, score',
+    orderBy: { column: 'created_at', ascending: false }
+  });
+
+  const { data: users, loading: loadingUsers } = useDataFetching<'users'>({
+    table: 'users',
+    select: 'id, full_name, created_at',
+    orderBy: { column: 'created_at', ascending: false }
+  });
+
+  const { data: quizzes, loading: loadingQuizzes } = useDataFetching<'quizzes'>({
+    table: 'quizzes',
+    select: 'id, title, created_at',
+    orderBy: { column: 'created_at', ascending: false }
+  });
+
+  // Combine and format activities
+  const activities = useMemo(() => {
+    const allActivities: ActivityItem[] = [];
+
+    // Add submissions
+    submissions?.forEach(submission => {
+      const quiz = quizzes?.find(q => q.id === submission.quiz_id);
+      const user = users?.find(u => u.id === submission.user_id);
       
-      // Build query parameters
-      const params = new URLSearchParams()
-      params.append('page', page.toString())
-      
-      if (activityType && activityType !== "all") {
-        params.append('type', activityType)
+      allActivities.push({
+        id: submission.id,
+        type: 'submission',
+        title: `Quiz Submission: ${quiz?.title || 'Unknown Quiz'}`,
+        details: `${user?.full_name || 'Unknown User'} scored ${submission.score}%`,
+        timestamp: submission.created_at,
+        user_id: submission.user_id,
+        quiz_id: submission.quiz_id
+      });
+    });
+
+    // Add registrations
+    users?.forEach(user => {
+      allActivities.push({
+        id: user.id,
+        type: 'registration',
+        title: 'User Registration',
+        details: `${user.full_name || 'Unknown User'} joined the platform`,
+        timestamp: user.created_at,
+        user_id: user.id
+      });
+    });
+
+    // Add quiz creations
+    quizzes?.forEach(quiz => {
+      allActivities.push({
+        id: quiz.id,
+        type: 'quiz_creation',
+        title: 'Quiz Created',
+        details: `New quiz "${quiz.title}" was created`,
+        timestamp: quiz.created_at,
+        quiz_id: quiz.id
+      });
+    });
+
+    // Sort by timestamp
+    return allActivities.sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  }, [submissions, users, quizzes]);
+
+  // Filter activities based on selected filters
+  const filteredActivities = useMemo(() => {
+    return activities.filter(activity => {
+      // Filter by type
+      if (activityType !== 'all' && activity.type !== activityType) {
+        return false;
       }
-      
-      if (startDate) {
-        params.append('startDate', startDate.toISOString())
+
+      // Filter by date range
+      const activityDate = new Date(activity.timestamp);
+      if (startDate && activityDate < startDate) {
+        return false;
       }
-      
-      if (endDate) {
-        params.append('endDate', endDate.toISOString())
+      if (endDate && activityDate > endDate) {
+        return false;
       }
-      
-      // Make API request
-      const response = await fetch(`/api/admin/activity?${params.toString()}`)
-      
-      if (!response.ok) {
-        throw new Error(`Error fetching activities: ${response.status}`)
-      }
-      
-      const data = await response.json()
-      setActivities(data.activities)
-      setPagination(data.pagination)
-      setLoading(false)
-    } catch (err) {
-      console.error('Failed to fetch activities:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load activities. Please try again later.')
-      setLoading(false)
-    }
-  }
-  
-  // Load activities when filters change
+
+      return true;
+    });
+  }, [activities, activityType, startDate, endDate]);
+
+  // Calculate pagination
   useEffect(() => {
-    fetchActivities(1) // Reset to page 1 when filters change
-  }, [activityType, startDate, endDate])
+    const total = filteredActivities.length;
+    const totalPages = Math.ceil(total / pagination.limit);
+    setPagination(prev => ({
+      ...prev,
+      total,
+      totalPages
+    }));
+  }, [filteredActivities, pagination.limit]);
+
+  // Get paginated activities
+  const paginatedActivities = useMemo(() => {
+    const start = (pagination.page - 1) * pagination.limit;
+    return filteredActivities.slice(start, start + pagination.limit);
+  }, [filteredActivities, pagination.page, pagination.limit]);
+
+  const loading = loadingSubmissions || loadingUsers || loadingQuizzes;
 
   // Helper function to get badge color based on activity type
-  const getBadgeVariant = (type: string) => {
+  const getBadgeVariant = (type: ActivityType | 'all'): "default" | "secondary" | "outline" => {
     switch (type) {
       case 'submission':
         return 'default'
@@ -107,7 +173,7 @@ export default function ActivityPage() {
   }
   
   // Helper function for activity type label
-  const getActivityTypeLabel = (type: string) => {
+  const getActivityTypeLabel = (type: ActivityType | 'all'): string => {
     switch (type) {
       case 'submission':
         return 'Quiz Submission'
@@ -116,7 +182,7 @@ export default function ActivityPage() {
       case 'quiz_creation':
         return 'Quiz Creation'
       default:
-        return type
+        return 'All Activities'
     }
   }
 
@@ -166,7 +232,7 @@ export default function ActivityPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="text-sm font-medium mb-1 block">Activity Type</label>
-                <Select value={activityType} onValueChange={setActivityType}>
+                <Select value={activityType} onValueChange={(value) => setActivityType(value as ActivityType | 'all')}>
                   <SelectTrigger>
                     <SelectValue placeholder="All Activities" />
                   </SelectTrigger>
@@ -242,81 +308,56 @@ export default function ActivityPage() {
             <div className="flex items-center justify-center h-64">
               <p>Loading activities...</p>
             </div>
-          ) : error ? (
-            <div className="flex items-center justify-center h-64 text-red-500">
-              <p>{error}</p>
-            </div>
           ) : (
             <div className="space-y-6">
-              {activities.length > 0 ? (
-                <>
-                  <div className="space-y-4">
-                    {activities.map((activity) => (
-                      <div 
-                        key={`${activity.type}-${activity.id}`} 
-                        className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge variant={getBadgeVariant(activity.type)}>
-                                {getActivityTypeLabel(activity.type)}
-                              </Badge>
-                              <span className="text-sm text-muted-foreground">{activity.time}</span>
-                            </div>
-                            <h3 className="font-medium">{activity.title}</h3>
-                            {activity.details && (
-                              <p className="text-sm text-muted-foreground mt-1">{activity.details}</p>
-                            )}
+              {/* Activity list */}
+              <div className="space-y-4">
+                {paginatedActivities.map((activity) => (
+                  <Card key={activity.id}>
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold">{activity.title}</h3>
+                            <Badge variant={getBadgeVariant(activity.type)}>
+                              {getActivityTypeLabel(activity.type)}
+                            </Badge>
                           </div>
-                          <div className="flex gap-2">
-                            {activity.user_id && (
-                              <Button variant="ghost" size="sm" asChild>
-                                <Link href={`/admin/users/${activity.user_id}`}>View User</Link>
-                              </Button>
-                            )}
-                            {activity.quiz_id && (
-                              <Button variant="ghost" size="sm" asChild>
-                                <Link href={`/admin/quizzes/${activity.quiz_id}`}>View Quiz</Link>
-                              </Button>
-                            )}
-                          </div>
+                          <p className="text-sm text-muted-foreground">{activity.details}</p>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {new Date(activity.timestamp).toLocaleString()}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                  
-                  {/* Pagination */}
-                  <div className="flex justify-center gap-2 mt-6">
-                    <Button 
-                      variant="outline" 
-                      disabled={pagination.page <= 1}
-                      onClick={() => fetchActivities(pagination.page - 1)}
-                    >
-                      Previous
-                    </Button>
-                    <span className="flex items-center px-4">
-                      Page {pagination.page} of {pagination.totalPages}
-                    </span>
-                    <Button 
-                      variant="outline" 
-                      disabled={pagination.page >= pagination.totalPages}
-                      onClick={() => fetchActivities(pagination.page + 1)}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <Card>
-                  <CardHeader className="text-center py-10">
-                    <CardTitle>No activities found</CardTitle>
-                    <CardDescription>
-                      Try changing your filters to see more results.
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-              )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Pagination */}
+              <div className="mt-6 flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} activities
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                    disabled={pagination.page === 1}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPagination(prev => ({ ...prev, page: Math.min(pagination.totalPages, prev.page + 1) }))}
+                    disabled={pagination.page === pagination.totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </div>

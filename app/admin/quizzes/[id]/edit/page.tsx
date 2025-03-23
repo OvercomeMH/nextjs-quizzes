@@ -18,22 +18,23 @@ import { Plus, Trash2, Save, AlertCircle, ArrowLeft } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import ProtectedRoute from "@/components/auth/ProtectedRoute"
+import { Quiz, Question, QuestionOption, QuizWithQuestions } from "@/types/database"
+import { useDataFetching } from "@/hooks/useDataFetching"
 
 // Types for our form
-interface QuizOption {
-  id: string;
-  text: string;
-  question_id?: string;
-  order_num?: number;
-}
-
-interface QuizQuestion {
+interface QuizFormQuestion {
   id?: string;
   text: string;
-  options: QuizOption[];
-  correctAnswer: string;
-  points?: number;
-  order_num?: number;
+  options: {
+    id: string; // a, b, c, d
+    text: string;
+    question_id: string | null;
+    order_num: number;
+  }[];
+  correct_answer: string;
+  points: number;
+  type: string;
+  order_num: number;
 }
 
 // Define the type for params
@@ -52,128 +53,111 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
   const [category, setCategory] = useState("");
   const [difficulty, setDifficulty] = useState("");
   const [timeLimit, setTimeLimit] = useState("10");
-  const [questions, setQuestions] = useState<QuizQuestion[]>([
+  const [questions, setQuestions] = useState<QuizFormQuestion[]>([
     {
       text: "",
       options: [
-        { id: "a", text: "" },
-        { id: "b", text: "" },
-        { id: "c", text: "" },
-        { id: "d", text: "" },
+        { id: "a", text: "", question_id: null, order_num: 0 },
+        { id: "b", text: "", question_id: null, order_num: 1 },
+        { id: "c", text: "", question_id: null, order_num: 2 },
+        { id: "d", text: "", question_id: null, order_num: 3 },
       ],
-      correctAnswer: "a",
+      correct_answer: "a",
       points: 10,
-    },
+      type: "multiple_choice",
+      order_num: 0
+    }
   ]);
   const [currentTab, setCurrentTab] = useState("details");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
 
-  // Fetch quiz data when the component mounts
+  // Fetch quiz data using our hook
+  const { data: quizData, loading, error: fetchError } = useDataFetching<'quizzes'>({
+    table: 'quizzes',
+    select: `
+      *,
+      questions:questions (
+        *,
+        options:question_possible_answers (*)
+      )
+    `,
+    filter: { column: 'id', operator: 'eq', value: quizId }
+  });
+
+  // Update form when quiz data changes
   useEffect(() => {
-    const fetchQuizData = async () => {
-      try {
-        // Fetch the quiz
-        const { data: quizData, error: quizError } = await supabase
-          .from('quizzes')
-          .select('*')
-          .eq('id', quizId)
-          .single();
+    if (quizData?.[0]) {
+      const quiz = quizData[0] as QuizWithQuestions;
+      setQuizTitle(quiz.title);
+      setQuizDescription(quiz.description || '');
+      setCategory(quiz.category || '');
+      setDifficulty(quiz.difficulty);
+      setTimeLimit(Math.round((quiz.time_limit || 600) / 60).toString()); // Convert seconds to minutes
 
-        if (quizError) {
-          throw new Error(`Failed to fetch quiz: ${quizError.message}`);
-        }
+      // Format questions for our UI
+      const formattedQuestions: QuizFormQuestion[] = quiz.questions.map((question: Question & { options: QuestionOption[] }, index: number) => ({
+        id: question.id,
+        text: question.text,
+        type: question.type || 'multiple_choice',
+        options: question.options.map((option: QuestionOption) => ({
+          id: option.option_id,
+          text: option.text,
+          question_id: option.question_id,
+          order_num: option.order_num || 0
+        })),
+        correct_answer: question.correct_answer,
+        points: question.points || 10,
+        order_num: question.order_num || index
+      }));
 
-        if (!quizData) {
-          throw new Error('Quiz not found');
-        }
-
-        // Set quiz details
-        setQuizTitle(quizData.title);
-        setQuizDescription(quizData.description);
-        setCategory(quizData.category || '');
-        setDifficulty(quizData.difficulty);
-        setTimeLimit(Math.round(quizData.time_limit / 60).toString()); // Convert seconds to minutes
-
-        // Fetch quiz questions
-        const { data: questionsData, error: questionsError } = await supabase
-          .from('questions')
-          .select('*')
-          .eq('quiz_id', quizId)
-          .order('order_num', { ascending: true });
-
-        if (questionsError) {
-          throw new Error(`Failed to fetch questions: ${questionsError.message}`);
-        }
-
-        // Create an array to hold the formatted questions
-        const formattedQuestions: QuizQuestion[] = [];
-
-        // Fetch and process each question with its options
-        for (const question of questionsData) {
-          // Fetch options for this question
-          const { data: optionsData, error: optionsError } = await supabase
-            .from('question_possible_answers')
-            .select('*')
-            .eq('question_id', question.id)
-            .order('order_num', { ascending: true });
-
-          if (optionsError) {
-            throw new Error(`Failed to fetch options for question ${question.id}: ${optionsError.message}`);
-          }
-
-          // Format options for our UI
-          const options: QuizOption[] = optionsData.map(option => ({
-            id: option.option_id,
-            text: option.text,
-            question_id: option.question_id,
-            order_num: option.order_num
-          }));
-
-          // Add the question with its options to our formatted questions array
-          formattedQuestions.push({
-            id: question.id,
-            text: question.text,
-            options: options,
-            correctAnswer: question.correct_answer,
-            points: question.points,
-            order_num: question.order_num
-          });
-        }
-
-        // Set questions if we found any, otherwise keep the default empty question
-        if (formattedQuestions.length > 0) {
-          setQuestions(formattedQuestions);
-        }
-
-        setIsLoading(false);
-      } catch (err: any) {
-        console.error("Error fetching quiz data:", err);
-        setError(err.message || "Failed to load quiz data");
-        setIsLoading(false);
+      // Set questions if we found any, otherwise keep the default empty question
+      if (formattedQuestions.length > 0) {
+        setQuestions(formattedQuestions);
       }
-    };
+    }
+  }, [quizData]);
 
-    fetchQuizData();
-  }, [quizId]);
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center text-red-500">{fetchError}</div>
+      </div>
+    );
+  }
+
+  if (!quizData?.[0]) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">Quiz not found</div>
+      </div>
+    );
+  }
 
   const addQuestion = () => {
-    setQuestions([
-      ...questions,
-      {
-        text: "",
-        options: [
-          { id: "a", text: "" },
-          { id: "b", text: "" },
-          { id: "c", text: "" },
-          { id: "d", text: "" },
-        ],
-        correctAnswer: "a",
-        points: 10,
-      },
-    ]);
+    const newQuestion: QuizFormQuestion = {
+      text: '',
+      options: [
+        { id: 'a', text: '', question_id: null, order_num: 0 },
+        { id: 'b', text: '', question_id: null, order_num: 1 },
+        { id: 'c', text: '', question_id: null, order_num: 2 },
+        { id: 'd', text: '', question_id: null, order_num: 3 }
+      ],
+      correct_answer: 'a',
+      points: 10,
+      type: 'multiple_choice',
+      order_num: questions.length
+    };
+    setQuestions([...questions, newQuestion]);
   };
 
   const removeQuestion = (index: number) => {
@@ -184,29 +168,44 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
     }
   };
 
+  const handleQuestionChange = (index: number, field: keyof QuizFormQuestion, value: any) => {
+    const updatedQuestions = [...questions];
+    if (field === 'options') {
+      // Handle options update separately to maintain all required fields
+      const updatedOptions = value.map((opt: any, i: number) => ({
+        ...opt,
+        question_id: opt.question_id || null,
+        order_num: opt.order_num || i
+      }));
+      updatedQuestions[index] = {
+        ...updatedQuestions[index],
+        options: updatedOptions
+      };
+    } else {
+      updatedQuestions[index] = {
+        ...updatedQuestions[index],
+        [field]: value
+      };
+    }
+    setQuestions(updatedQuestions);
+  };
+
   const updateQuestionText = (index: number, text: string) => {
-    const newQuestions = [...questions];
-    newQuestions[index].text = text;
-    setQuestions(newQuestions);
+    handleQuestionChange(index, 'text', text);
   };
 
   const updateOptionText = (questionIndex: number, optionId: string, text: string) => {
-    const newQuestions = [...questions];
-    const optionIndex = newQuestions[questionIndex].options.findIndex((o) => o.id === optionId);
-    newQuestions[questionIndex].options[optionIndex].text = text;
-    setQuestions(newQuestions);
+    handleQuestionChange(questionIndex, 'options', questions[questionIndex].options.map((option) =>
+      option.id === optionId ? { ...option, text } : option
+    ));
   };
 
   const updateCorrectAnswer = (questionIndex: number, value: string) => {
-    const newQuestions = [...questions];
-    newQuestions[questionIndex].correctAnswer = value;
-    setQuestions(newQuestions);
+    handleQuestionChange(questionIndex, 'correct_answer', value);
   };
 
   const updateQuestionPoints = (questionIndex: number, points: number) => {
-    const newQuestions = [...questions];
-    newQuestions[questionIndex].points = points;
-    setQuestions(newQuestions);
+    handleQuestionChange(questionIndex, 'points', points);
   };
 
   const handleSubmit = async () => {
@@ -222,176 +221,95 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
 
       // Calculate total points and total questions
       const totalQuestions = questions.length;
-      const totalPoints = questions.reduce((sum, q) => sum + (q.points || 10), 0);
+      const totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
       
       // 1. Update quiz record
-      try {
-        const { error: quizError } = await supabase
-          .from('quizzes')
-          .update({
-            title: quizTitle,
-            description: quizDescription,
-            category: category,
-            difficulty: difficulty,
-            time_limit: parseInt(timeLimit) * 60, // Convert to seconds
-            total_questions: totalQuestions,
-            total_points: totalPoints,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', quizId);
-          
-        if (quizError) {
-          console.error("Supabase error updating quiz:", quizError);
-          throw new Error(`Database error: ${quizError.message}`);
-        }
-      } catch (fetchError: any) {
-        console.error("Network error when updating quiz:", fetchError);
-        throw new Error("Network error when connecting to database. Please check your internet connection and try again.");
-      }
-      
-      // 2. Handle questions - this is more complex as we need to:
-      // - Update existing questions
-      // - Create new questions
-      // - Delete questions that are no longer present
-      
-      // First, fetch all existing questions to determine what to update/delete
-      const { data: existingQuestions, error: fetchError } = await supabase
-        .from('questions')
-        .select('id')
-        .eq('quiz_id', quizId);
+      const { error: quizError } = await supabase
+        .from('quizzes')
+        .update({
+          title: quizTitle,
+          description: quizDescription,
+          category: category,
+          difficulty: difficulty,
+          time_limit: parseInt(timeLimit) * 60, // Convert to seconds
+          total_questions: totalQuestions,
+          total_points: totalPoints,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', quizId);
         
-      if (fetchError) {
-        throw new Error(`Failed to fetch existing questions: ${fetchError.message}`);
-      }
-      
-      // Create a set of existing question IDs
-      const existingQuestionIds = new Set(existingQuestions.map(q => q.id));
-      
-      // Create a set of current question IDs from our form
-      const currentQuestionIds = new Set(questions.filter(q => q.id).map(q => q.id));
-      
-      // Find questions to delete (in existingQuestionIds but not in currentQuestionIds)
-      const questionIdsToDelete = [...existingQuestionIds].filter(id => !currentQuestionIds.has(id));
-      
-      // Delete questions that are no longer present
-      if (questionIdsToDelete.length > 0) {
-        const { error: deleteError } = await supabase
-          .from('questions')
-          .delete()
-          .in('id', questionIdsToDelete);
-          
-        if (deleteError) {
-          throw new Error(`Failed to delete questions: ${deleteError.message}`);
-        }
-      }
-      
-      // Update or create questions
-      const questionPromises = questions.map(async (question, index) => {
+      if (quizError) throw quizError;
+
+      // 2. Update questions
+      for (const question of questions) {
         if (question.id) {
           // Update existing question
-          const { error: updateError } = await supabase
+          const { error: questionError } = await supabase
             .from('questions')
             .update({
               text: question.text,
-              correct_answer: question.correctAnswer,
-              points: question.points || 10,
-              order_num: index,
+              type: question.type,
+              correct_answer: question.correct_answer,
+              points: question.points,
+              order_num: question.order_num,
+              updated_at: new Date().toISOString()
             })
             .eq('id', question.id);
             
-          if (updateError) {
-            throw new Error(`Failed to update question ${index + 1}: ${updateError.message}`);
-          }
-          
-          // Fetch existing options for this question
-          const { data: existingOptions, error: optionsError } = await supabase
-            .from('question_possible_answers')
-            .select('id, option_id')
-            .eq('question_id', question.id);
-            
-          if (optionsError) {
-            throw new Error(`Failed to fetch options for question ${index + 1}: ${optionsError.message}`);
-          }
-          
-          // Create a map of option_id to database id
-          const optionMap = new Map(existingOptions.map(o => [o.option_id, o.id]));
-          
-          // Update options
-          const optionPromises = question.options.map(async (option, optionIndex) => {
-            if (optionMap.has(option.id)) {
-              // Update existing option
-              const { error: updateOptionError } = await supabase
+          if (questionError) throw questionError;
+
+          // Update existing options
+          for (const option of question.options) {
+            if (option.question_id) {
+              const { error: optionError } = await supabase
                 .from('question_possible_answers')
                 .update({
                   text: option.text,
-                  order_num: optionIndex
+                  order_num: option.order_num,
+                  updated_at: new Date().toISOString()
                 })
-                .eq('id', optionMap.get(option.id));
+                .eq('question_id', question.id)
+                .eq('option_id', option.id);
                 
-              if (updateOptionError) {
-                throw new Error(`Failed to update option ${option.id} for question ${index + 1}: ${updateOptionError.message}`);
-              }
-            } else {
-              // Create new option
-              const { error: createOptionError } = await supabase
-                .from('question_possible_answers')
-                .insert({
-                  question_id: question.id,
-                  option_id: option.id,
-                  text: option.text,
-                  order_num: optionIndex
-                });
-                
-              if (createOptionError) {
-                throw new Error(`Failed to create option ${option.id} for question ${index + 1}: ${createOptionError.message}`);
-              }
+              if (optionError) throw optionError;
             }
-          });
-          
-          await Promise.all(optionPromises);
-          
-          return question.id;
+          }
         } else {
           // Create new question
-          const { data: newQuestion, error: createError } = await supabase
+          const { data: newQuestion, error: questionError } = await supabase
             .from('questions')
             .insert({
               quiz_id: quizId,
               text: question.text,
-              correct_answer: question.correctAnswer,
-              points: question.points || 10,
-              order_num: index,
+              type: question.type,
+              correct_answer: question.correct_answer,
+              points: question.points,
+              order_num: question.order_num,
+              created_at: new Date().toISOString()
             })
             .select()
             .single();
             
-          if (createError) {
-            throw new Error(`Failed to create question ${index + 1}: ${createError.message}`);
-          }
-          
+          if (questionError) throw questionError;
+
           // Create options for new question
-          const optionPromises = question.options.map(async (option, optionIndex) => {
+          const optionPromises = question.options.map(async (option, index) => {
             const { error: optionError } = await supabase
               .from('question_possible_answers')
               .insert({
                 question_id: newQuestion.id,
                 option_id: option.id,
                 text: option.text,
-                order_num: optionIndex
+                order_num: index,
+                created_at: new Date().toISOString()
               });
               
-            if (optionError) {
-              throw new Error(`Failed to create option ${option.id} for question ${index + 1}: ${optionError.message}`);
-            }
+            if (optionError) throw optionError;
           });
           
           await Promise.all(optionPromises);
-          
-          return newQuestion.id;
         }
-      });
-      
-      await Promise.all(questionPromises);
+      }
       
       setSuccess(true);
       
@@ -408,16 +326,7 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
   };
 
   const isDetailsValid = quizTitle && quizDescription && category && difficulty && timeLimit;
-  const areQuestionsValid = questions.every((q) => q.text && q.options.every((o) => o.text) && q.correctAnswer);
-
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center">
-        <h2 className="text-xl font-semibold mb-2">Loading quiz data...</h2>
-        <p className="text-muted-foreground">Please wait while we fetch the quiz information.</p>
-      </div>
-    );
-  }
+  const areQuestionsValid = questions.every((q) => q.text && q.options.every((o) => o.text) && q.correct_answer);
 
   return (
     <ProtectedRoute>
@@ -610,7 +519,7 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
                         <div className="space-y-2">
                           <Label>Correct Answer</Label>
                           <RadioGroup
-                            value={question.correctAnswer}
+                            value={question.correct_answer}
                             onValueChange={(value) => updateCorrectAnswer(questionIndex, value)}
                             className="flex space-x-2"
                           >
@@ -632,7 +541,7 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
                             type="number"
                             min="1"
                             max="100"
-                            value={question.points?.toString() || "10"}
+                            value={question.points.toString()}
                             onChange={(e) => updateQuestionPoints(questionIndex, parseInt(e.target.value) || 10)}
                           />
                         </div>

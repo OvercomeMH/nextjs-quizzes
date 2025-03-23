@@ -1,66 +1,31 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  quizzesTaken: number;
-  averageScore: number;
-}
+import { User } from "@/types/database"
+import { useDataFetching } from "@/hooks/useDataFetching"
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([])
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        setLoading(true)
-        const response = await fetch('/api/admin/users')
-        
-        if (!response.ok) {
-          throw new Error(`Error fetching users: ${response.status}`)
-        }
-        
-        const data = await response.json()
-        setUsers(data)
-        setFilteredUsers(data)
-        setLoading(false)
-      } catch (err) {
-        console.error('Failed to fetch users:', err)
-        setError(err instanceof Error ? err.message : 'Failed to load users. Please try again later.')
-        setLoading(false)
-      }
-    }
-    
-    fetchUsers()
-  }, [])
+  
+  // Fetch users using our hook
+  const { data: users, loading, error } = useDataFetching<'users'>({
+    table: 'users',
+    select: 'id, full_name, email, quizzes_taken, total_points',
+    orderBy: { column: 'created_at', ascending: false }
+  });
 
   // Filter users when search query changes
-  useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setFilteredUsers(users)
-      return
-    }
-    
-    const query = searchQuery.toLowerCase()
-    const filtered = users.filter(user => 
-      user.name.toLowerCase().includes(query) || 
-      user.email.toLowerCase().includes(query)
-    )
-    
-    setFilteredUsers(filtered)
-  }, [searchQuery, users])
+  const filteredUsers = searchQuery.trim() === "" 
+    ? users 
+    : users.filter(user => 
+        user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        user.email.toLowerCase().includes(searchQuery.toLowerCase())
+      );
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -117,12 +82,12 @@ export default function UsersPage() {
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <p>Loading users...</p>
+            <div className="flex justify-center items-center h-64">
+              <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
             </div>
           ) : error ? (
-            <div className="flex items-center justify-center h-64 text-red-500">
-              <p>{error}</p>
+            <div className="flex justify-center items-center h-64">
+              <p className="text-red-500">{error}</p>
             </div>
           ) : (
             <div className="grid gap-4">
@@ -142,10 +107,14 @@ export default function UsersPage() {
                       <tbody>
                         {filteredUsers.map((user) => (
                           <tr key={user.id} className="border-t">
-                            <td className="p-4 font-medium">{user.name}</td>
+                            <td className="p-4 font-medium">{user.full_name || 'N/A'}</td>
                             <td className="p-4">{user.email}</td>
-                            <td className="p-4">{user.quizzesTaken}</td>
-                            <td className="p-4">{user.averageScore}%</td>
+                            <td className="p-4">{user.quizzes_taken || 0}</td>
+                            <td className="p-4">
+                              {user.quizzes_taken && user.total_points
+                                ? ((user.total_points / (user.quizzes_taken * 100)) * 100).toFixed(1) + '%'
+                                : '0%'}
+                            </td>
                             <td className="p-4">
                               <div className="flex gap-2">
                                 <Button variant="ghost" size="sm" asChild>
@@ -181,4 +150,4 @@ export default function UsersPage() {
       </main>
     </div>
   )
-} 
+}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/components/auth/AuthProvider"
@@ -10,54 +10,36 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Badge } from "@/components/ui/badge"
 import { PlusCircle, Pencil, BarChart3, Trash } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Quiz } from "@/types/database"
+import { useDataFetching } from "@/hooks/useDataFetching"
+import type { TableRow } from "@/lib/supabase"
 
-interface Quiz {
-  id: string;
-  title: string;
-  description: string;
-  difficulty: string;
-  category: string;
-  times_played: number;
-  total_questions: number;
-  created_at: string;
-}
+// Define type for quiz with submission count
+type QuizWithSubmissions = TableRow<'quizzes'> & {
+  submissions: { count: number }[];
+};
 
 export default function AdminQuizzesPage() {
   const { user } = useAuth();
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const { data: quizzes, loading, error: fetchError, mutate } = useDataFetching<'quizzes'>({
+    table: 'quizzes',
+    select: `
+      *,
+      submissions:submissions(count)
+    `,
+    orderBy: { column: 'created_at', ascending: false }
+  });
 
-  useEffect(() => {
-    const fetchQuizzes = async () => {
-      try {
-        setLoading(true);
-        
-        const { data, error } = await supabase
-          .from('quizzes')
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        if (error) {
-          throw error;
-        }
-        
-        setQuizzes(data || []);
-      } catch (err: any) {
-        console.error('Error fetching quizzes:', err);
-        setError(err.message || 'Failed to load quizzes');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchQuizzes();
-  }, []);
+  // Cast quizzes to include submission count
+  const typedQuizzes = (quizzes || []) as QuizWithSubmissions[];
+
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleDeleteQuiz = async (id: string) => {
     try {
       setDeleteId(id);
+      setError(null);
       
       // First delete all questions associated with this quiz
       const { error: questionsError } = await supabase
@@ -75,8 +57,8 @@ export default function AdminQuizzesPage() {
       
       if (quizError) throw quizError;
       
-      // Update the UI
-      setQuizzes(quizzes.filter(quiz => quiz.id !== id));
+      // Update the UI using SWR's mutate
+      await mutate();
     } catch (err: any) {
       console.error('Error deleting quiz:', err);
       setError(`Failed to delete quiz: ${err.message}`);
@@ -133,10 +115,10 @@ export default function AdminQuizzesPage() {
             <p className="text-muted-foreground">Create, edit, and analyze quizzes.</p>
           </div>
 
-          {error && (
+          {(error || fetchError) && (
             <Alert variant="destructive" className="mb-6">
               <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{error || fetchError}</AlertDescription>
             </Alert>
           )}
 
@@ -144,7 +126,7 @@ export default function AdminQuizzesPage() {
             <div className="flex justify-center py-12">
               <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
             </div>
-          ) : quizzes.length === 0 ? (
+          ) : typedQuizzes.length === 0 ? (
             <div className="text-center py-12 border rounded-lg">
               <h3 className="text-lg font-medium mb-2">No quizzes yet</h3>
               <p className="text-muted-foreground mb-4">Get started by creating your first quiz.</p>
@@ -154,7 +136,7 @@ export default function AdminQuizzesPage() {
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {quizzes.map((quiz) => (
+              {typedQuizzes.map((quiz) => (
                 <Card key={quiz.id}>
                   <CardHeader>
                     <div className="flex justify-between items-start">
@@ -180,7 +162,7 @@ export default function AdminQuizzesPage() {
                         <span className="text-muted-foreground">Questions:</span> {quiz.total_questions}
                       </div>
                       <div>
-                        <span className="text-muted-foreground">Times Played:</span> {quiz.times_played}
+                        <span className="text-muted-foreground">Times Played:</span> {quiz.submissions?.[0]?.count || 0}
                       </div>
                       <div className="col-span-2">
                         <span className="text-muted-foreground">Created:</span> {formatDate(quiz.created_at)}

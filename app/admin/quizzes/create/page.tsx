@@ -17,18 +17,18 @@ import { Plus, Trash2, Save, AlertCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import ProtectedRoute from "@/components/auth/ProtectedRoute"
+import { Quiz, Question, QuestionOption } from "@/types/database"
 
 // Types for our form
-interface QuizOption {
-  id: string;
+interface QuizFormQuestion {
   text: string;
-}
-
-interface QuizQuestion {
-  text: string;
-  options: QuizOption[];
-  correctAnswer: string;
-  points?: number;
+  options: {
+    id: string; // a, b, c, d
+    text: string;
+  }[];
+  correct_answer: string;
+  points: number;
+  type: string;
 }
 
 export default function CreateQuizPage() {
@@ -39,7 +39,7 @@ export default function CreateQuizPage() {
   const [category, setCategory] = useState("")
   const [difficulty, setDifficulty] = useState("")
   const [timeLimit, setTimeLimit] = useState("10")
-  const [questions, setQuestions] = useState<QuizQuestion[]>([
+  const [questions, setQuestions] = useState<QuizFormQuestion[]>([
     {
       text: "",
       options: [
@@ -48,8 +48,9 @@ export default function CreateQuizPage() {
         { id: "c", text: "" },
         { id: "d", text: "" },
       ],
-      correctAnswer: "a",
+      correct_answer: "a",
       points: 10,
+      type: "multiple_choice"
     },
   ])
   const [currentTab, setCurrentTab] = useState("details")
@@ -68,8 +69,9 @@ export default function CreateQuizPage() {
           { id: "c", text: "" },
           { id: "d", text: "" },
         ],
-        correctAnswer: "a",
+        correct_answer: "a",
         points: 10,
+        type: "multiple_choice"
       },
     ])
   }
@@ -97,7 +99,7 @@ export default function CreateQuizPage() {
 
   const updateCorrectAnswer = (questionIndex: number, value: string) => {
     const newQuestions = [...questions]
-    newQuestions[questionIndex].correctAnswer = value
+    newQuestions[questionIndex].correct_answer = value
     setQuestions(newQuestions)
   }
 
@@ -120,7 +122,7 @@ export default function CreateQuizPage() {
 
       // Calculate total points and total questions
       const totalQuestions = questions.length
-      const totalPoints = questions.reduce((sum, q) => sum + (q.points || 10), 0)
+      const totalPoints = questions.reduce((sum, q) => sum + q.points, 0)
       
       // 1. Create quiz record
       const { data: quiz, error: quizError } = await supabase
@@ -134,7 +136,9 @@ export default function CreateQuizPage() {
           total_questions: totalQuestions,
           total_points: totalPoints,
           times_played: 0,
-          // No user_id or created_by field based on the actual database schema
+          average_rating: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
         .select()
         .single();
@@ -151,10 +155,11 @@ export default function CreateQuizPage() {
           .insert({
             quiz_id: quiz.id,
             text: question.text,
-            correct_answer: question.correctAnswer, // Store the correct answer option ID
-            points: question.points || 10,
+            type: question.type,
+            correct_answer: question.correct_answer,
+            points: question.points,
             order_num: index,
-            // Do not include options here - they go in a separate table
+            created_at: new Date().toISOString()
           })
           .select()
           .single();
@@ -169,9 +174,10 @@ export default function CreateQuizPage() {
             .from('question_possible_answers')
             .insert({
               question_id: questionData.id,
-              option_id: option.id, // a, b, c, d, etc.
+              option_id: option.id,
               text: option.text,
-              order_num: optionIndex
+              order_num: optionIndex,
+              created_at: new Date().toISOString()
             });
             
           if (optionError) {
@@ -203,7 +209,7 @@ export default function CreateQuizPage() {
   }
 
   const isDetailsValid = quizTitle && quizDescription && category && difficulty && timeLimit
-  const areQuestionsValid = questions.every((q) => q.text && q.options.every((o) => o.text) && q.correctAnswer)
+  const areQuestionsValid = questions.every((q) => q.text && q.options.every((o) => o.text) && q.correct_answer)
 
   return (
     <ProtectedRoute>
@@ -391,7 +397,7 @@ export default function CreateQuizPage() {
                         <div className="space-y-2">
                           <Label>Correct Answer</Label>
                           <RadioGroup
-                            value={question.correctAnswer}
+                            value={question.correct_answer}
                             onValueChange={(value) => updateCorrectAnswer(questionIndex, value)}
                             className="flex space-x-2"
                           >
@@ -413,7 +419,7 @@ export default function CreateQuizPage() {
                             type="number"
                             min="1"
                             max="100"
-                            value={question.points?.toString() || "10"}
+                            value={question.points.toString()}
                             onChange={(e) => updateQuestionPoints(questionIndex, parseInt(e.target.value) || 10)}
                           />
                         </div>

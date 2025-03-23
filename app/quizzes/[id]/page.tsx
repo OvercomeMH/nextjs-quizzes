@@ -12,39 +12,7 @@ import { Progress } from "@/components/ui/progress"
 import { AlertCircle, Clock } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useAuth } from "@/components/auth/AuthProvider"
-
-// Define types
-interface QuizOption {
-  id: string;
-  text: string;
-}
-
-interface QuizQuestion {
-  id: string;
-  text: string;
-  type: string;
-  points: number;
-  options: QuizOption[];
-  correctAnswer: string;
-  explanation?: string;
-}
-
-interface Quiz {
-  id: string;
-  title: string;
-  description: string;
-  difficulty: string;
-  questions: QuizQuestion[];
-  timeLimit: number;
-  metadata: {
-    createdAt: string;
-    updatedAt: string;
-    totalQuestions: number;
-    totalPoints: number;
-    averageRating: number;
-    timesPlayed: number;
-  };
-}
+import { QuizWithQuestionsAndMetadata } from "@/types/database"
 
 interface PageParams {
   id: string;
@@ -59,7 +27,7 @@ export default function QuizPage({ params }: { params: Promise<PageParams> }) {
   const { user } = useAuth();
   
   const router = useRouter();
-  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [quiz, setQuiz] = useState<QuizWithQuestionsAndMetadata | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);

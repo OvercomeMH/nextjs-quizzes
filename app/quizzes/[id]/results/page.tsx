@@ -9,39 +9,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Progress } from "@/components/ui/progress"
 import { CheckCircle2, XCircle } from "lucide-react"
 import { useAuth } from "@/components/auth/AuthProvider"
-
-// Define types
-interface QuizOption {
-  id: string;
-  text: string;
-}
-
-interface QuizQuestion {
-  id: string;
-  text: string;
-  type: string;
-  points: number;
-  options: QuizOption[];
-  correctAnswer: string;
-  explanation?: string;
-}
-
-interface Quiz {
-  id: string;
-  title: string;
-  description: string;
-  difficulty: string;
-  questions: QuizQuestion[];
-  timeLimit: number;
-  metadata: {
-    createdAt: string;
-    updatedAt: string;
-    totalQuestions: number;
-    totalPoints: number;
-    averageRating: number;
-    timesPlayed: number;
-  };
-}
+import { supabase } from "@/lib/supabase"
+import { QuizWithQuestions, Question, QuestionOption } from "@/types/database"
+import { useDataFetching } from "@/hooks/useDataFetching"
 
 interface PageParams {
   id: string;
@@ -60,50 +30,32 @@ export default function QuizResultsPage({ params }: { params: Promise<PageParams
   const total = Number.parseInt(searchParams.get("total") || "1");
   const percentage = Math.round((score / total) * 100);
 
-  const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [userAnswers, setUserAnswers] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  
+  // Fetch quiz data using our hook
+  const { data: quizData, loading, error } = useDataFetching<'quizzes'>({
+    table: 'quizzes',
+    select: `
+      *,
+      questions:questions (
+        *,
+        options:question_possible_answers (*)
+      )
+    `,
+    filter: { column: 'id', operator: 'eq', value: quizId }
+  });
 
+  // Get answers from query params
   useEffect(() => {
-    // Get answers from query params
     const answersParam = searchParams.get("answers");
     const answers = answersParam ? JSON.parse(decodeURIComponent(answersParam)) : [];
     setUserAnswers(answers);
-    
-    // Fetch quiz data from API
-    const fetchQuiz = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`/api/quizzes/${quizId}`);
-        
-        if (!response.ok) {
-          if (response.status === 404) {
-            setError("Quiz not found");
-          } else {
-            setError("Failed to load quiz");
-          }
-          setLoading(false);
-          return;
-        }
-        
-        const quizData = await response.json();
-        setQuiz(quizData);
-        setLoading(false);
-      } catch (err) {
-        console.error("Error fetching quiz:", err);
-        setError("Failed to load quiz. Please try again later.");
-        setLoading(false);
-      }
-    };
-    
-    fetchQuiz();
-  }, [quizId, searchParams]);
+  }, [searchParams]);
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">Loading results...</div>
+        <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -116,13 +68,15 @@ export default function QuizResultsPage({ params }: { params: Promise<PageParams
     );
   }
 
-  if (!quiz) {
+  if (!quizData?.[0]) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">Quiz results not found</div>
       </div>
     );
   }
+
+  const quiz = quizData[0] as QuizWithQuestions;
 
   const getResultMessage = (percentage: number): string => {
     if (percentage >= 90) return "Excellent! You've mastered this topic.";
@@ -176,11 +130,11 @@ export default function QuizResultsPage({ params }: { params: Promise<PageParams
 
           <h2 className="text-xl font-bold mb-4">Question Review</h2>
           <div className="space-y-4">
-            {quiz.questions.map((question, index) => {
+            {quiz.questions.map((question: Question & { options: QuestionOption[] }, index: number) => {
               const userAnswer = userAnswers[index] || '';
-              const isCorrect = userAnswer === question.correctAnswer;
-              const userOption = question.options.find((opt) => opt.id === userAnswer);
-              const correctOption = question.options.find((opt) => opt.id === question.correctAnswer);
+              const isCorrect = userAnswer === question.correct_answer;
+              const userOption = question.options.find((opt: QuestionOption) => opt.id === userAnswer);
+              const correctOption = question.options.find((opt: QuestionOption) => opt.id === question.correct_answer);
 
               return (
                 <Card key={question.id} className={isCorrect ? "border-green-200" : "border-red-200"}>
@@ -211,7 +165,7 @@ export default function QuizResultsPage({ params }: { params: Promise<PageParams
                       {!isCorrect && (
                         <div className="grid grid-cols-[20px_1fr] gap-2">
                           <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-xs text-white">
-                            {question.correctAnswer}
+                            {question.correct_answer}
                           </div>
                           <div>
                             <p className="text-green-600">Correct answer: {correctOption?.text}</p>

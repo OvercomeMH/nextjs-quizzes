@@ -14,69 +14,38 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute"
 import { supabase } from "@/lib/supabase"
 import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-
-interface UserProfile {
-  id: string
-  username: string
-  email: string
-  full_name: string
-  quizzes_taken: number
-  average_score: number
-  total_points: number
-  rank: string
-  email_notifications: boolean
-  public_profile: boolean
-  created_at: string
-}
+import { User } from "@/types/database"
+import { useDataFetching } from "@/hooks/useDataFetching"
 
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null)
   const [nameInput, setNameInput] = useState<string>("")
   const [emailInput, setEmailInput] = useState<string>("")
   const [usernameInput, setUsernameInput] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
-  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [emailNotifications, setEmailNotifications] = useState(false)
   const [publicProfile, setPublicProfile] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   
-  // Fetch profile data when component mounts
+  // Fetch profile data using our hook
+  const { data: profileData, loading: isLoadingProfile, error: profileError } = useDataFetching<'users'>({
+    table: 'users',
+    select: '*',
+    orderBy: { column: 'created_at', ascending: false }
+  });
+
+  // Set form values when profile data changes
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user) return;
-      
-      try {
-        setIsLoadingProfile(true);
-        setError(null);
-        
-        const { data, error } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", user.id)
-          .single();
-          
-        if (error) throw error;
-        
-        setProfile(data);
-        
-        // Set form values
-        setNameInput(data.full_name || "");
-        setEmailInput(data.email || "");
-        setUsernameInput(data.username || "");
-        setEmailNotifications(data.email_notifications || false);
-        setPublicProfile(data.public_profile || false);
-      } catch (err: any) {
-        console.error("Error fetching profile:", err);
-        setError(err.message || "Failed to load profile data");
-      } finally {
-        setIsLoadingProfile(false);
-      }
-    };
-    
-    fetchProfile();
-  }, [user]);
+    if (profileData?.[0]) {
+      const profile = profileData[0];
+      setNameInput(profile.full_name || "");
+      setEmailInput(profile.email || "");
+      setUsernameInput(profile.username || "");
+      setEmailNotifications(profile.email_notifications || false);
+      setPublicProfile(profile.public_profile || false);
+    }
+  }, [profileData]);
 
   // Handle settings changes
   const updateSettings = async (setting: 'email_notifications' | 'public_profile', value: boolean) => {
@@ -96,8 +65,9 @@ export default function ProfilePage() {
         
       if (error) throw error;
       
-      // Update the local state
-      setProfile(prev => prev ? { ...prev, [setting]: value } : null);
+      // Update local state
+      setEmailNotifications(setting === 'email_notifications' ? value : emailNotifications);
+      setPublicProfile(setting === 'public_profile' ? value : publicProfile);
       setSuccessMessage("Settings updated successfully!");
       
       // Clear success message after 3 seconds
@@ -110,13 +80,11 @@ export default function ProfilePage() {
   
   // Handle email notifications toggle
   const handleEmailNotificationsChange = (checked: boolean) => {
-    setEmailNotifications(checked);
     updateSettings('email_notifications', checked);
   };
   
   // Handle public profile toggle
   const handlePublicProfileChange = (checked: boolean) => {
-    setPublicProfile(checked);
     updateSettings('public_profile', checked);
   };
 
@@ -148,16 +116,6 @@ export default function ProfilePage() {
         if (emailError) throw emailError;
       }
       
-      // Refetch the profile to get the updated data
-      const { data: updatedProfile, error: fetchError } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-        
-      if (fetchError) throw fetchError;
-      
-      setProfile(updatedProfile);
       setSuccessMessage("Profile updated successfully!");
       
       // Clear success message after 3 seconds
@@ -173,7 +131,7 @@ export default function ProfilePage() {
   if (isLoadingProfile) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center">
-        <div className="text-xl">Loading profile...</div>
+        <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -261,26 +219,24 @@ export default function ProfilePage() {
             <Card>
               <CardHeader>
                 <CardTitle>Your Quiz Statistics</CardTitle>
-                <CardDescription>See how you've been performing</CardDescription>
+                <CardDescription>View your quiz performance and achievements</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 p-4 border rounded-lg">
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">Quizzes Taken</p>
-                    <p className="text-2xl font-bold">{profile?.quizzes_taken || 0}</p>
+                    <p className="text-2xl font-bold">{profileData?.[0]?.quizzes_taken || 0}</p>
                   </div>
-                  <div className="space-y-2 p-4 border rounded-lg">
-                    <p className="text-sm text-muted-foreground">Average Score</p>
-                    <p className="text-2xl font-bold">{profile?.average_score ? `${profile.average_score.toFixed(1)}%` : "0%"}</p>
-                  </div>
-                  <div className="space-y-2 p-4 border rounded-lg">
+                  <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">Total Points</p>
-                    <p className="text-2xl font-bold">{profile?.total_points || 0}</p>
+                    <p className="text-2xl font-bold">{profileData?.[0]?.total_points || 0}</p>
                   </div>
-                  <div className="space-y-2 p-4 border rounded-lg">
-                    <p className="text-sm text-muted-foreground">Member Since</p>
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Average Score</p>
                     <p className="text-2xl font-bold">
-                      {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : "N/A"}
+                      {profileData?.[0]?.quizzes_taken && profileData?.[0]?.total_points
+                        ? ((profileData[0].total_points / (profileData[0].quizzes_taken * 100)) * 100).toFixed(1) + '%'
+                        : '0%'}
                     </p>
                   </div>
                 </div>
@@ -298,33 +254,32 @@ export default function ProfilePage() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Email Notifications</Label>
-                    <p className="text-sm text-muted-foreground">Receive emails about new quizzes</p>
+                    <p className="text-sm text-muted-foreground">
+                      Receive email notifications about your quiz results and achievements
+                    </p>
                   </div>
-                  <Switch 
-                    checked={emailNotifications} 
+                  <Switch
+                    checked={emailNotifications}
                     onCheckedChange={handleEmailNotificationsChange}
                   />
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Public Profile</Label>
-                    <p className="text-sm text-muted-foreground">Allow others to see your quiz results</p>
+                    <p className="text-sm text-muted-foreground">
+                      Allow other users to view your quiz statistics and achievements
+                    </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={publicProfile}
                     onCheckedChange={handlePublicProfileChange}
                   />
                 </div>
               </CardContent>
-              <CardFooter>
-                <Button variant="outline" className="w-full" onClick={() => setError("Password change functionality not implemented yet")}>
-                  Change Password
-                </Button>
-              </CardFooter>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
     </ProtectedRoute>
-  );
-} 
+  )
+}
