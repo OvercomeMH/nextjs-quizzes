@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { AdminLayout } from "@/components/layouts/AdminLayout"
+import { useDataFetching } from "@/hooks/useDataFetching"
 
 // Updated interface definitions to match our API responses
 interface Quiz {
@@ -48,64 +49,67 @@ interface Activity {
 }
 
 export default function AdminDashboard() {
-  const [quizzes, setQuizzes] = useState<Quiz[]>([])
-  const [users, setUsers] = useState<User[]>([])
-  const [submissions, setSubmissions] = useState<Submission[]>([])
-  const [stats, setStats] = useState<DashboardStats>({
-    totalQuizzes: 0,
-    totalUsers: 0,
-    totalSubmissions: 0,
-    averageScore: 0
-  })
-  const [activity, setActivity] = useState<Activity[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Fetch dashboard stats with 30-second refresh interval
+  const { data: statsData, loading: loadingStats, error: statsError } = useDataFetching<'submissions'>({
+    table: 'submissions',
+    select: 'id, score, total_possible',
+    refreshInterval: 30000, // Refresh every 30 seconds
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true
+  });
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true)
-        
-        // Fetch dashboard stats
-        const statsResponse = await fetch('/api/admin/dashboard')
-        if (!statsResponse.ok) throw new Error('Failed to fetch dashboard stats')
-        const statsData = await statsResponse.json()
-        setStats(statsData)
-        
-        // Fetch quizzes
-        const quizzesResponse = await fetch('/api/admin/quizzes')
-        if (!quizzesResponse.ok) throw new Error('Failed to fetch quizzes')
-        const quizzesData = await quizzesResponse.json()
-        setQuizzes(quizzesData)
-        
-        // Fetch users
-        const usersResponse = await fetch('/api/admin/users')
-        if (!usersResponse.ok) throw new Error('Failed to fetch users')
-        const usersData = await usersResponse.json()
-        setUsers(usersData)
-        
-        // Fetch submissions chart data
-        const submissionsResponse = await fetch('/api/admin/activity/submissions')
-        if (!submissionsResponse.ok) throw new Error('Failed to fetch submissions chart')
-        const submissionsData = await submissionsResponse.json()
-        setSubmissions(submissionsData)
-        
-        // Fetch recent activity
-        const activityResponse = await fetch('/api/admin/activity/recent')
-        if (!activityResponse.ok) throw new Error('Failed to fetch recent activity')
-        const activityData = await activityResponse.json()
-        setActivity(activityData)
-        
-        setLoading(false)
-      } catch (err) {
-        console.error('Error fetching dashboard data:', err)
-        setError(err instanceof Error ? err.message : 'An error occurred')
-        setLoading(false)
-      }
-    }
-    
-    fetchDashboardData()
-  }, [])
+  // Fetch quizzes with 1-minute refresh interval
+  const { data: quizzesData, loading: loadingQuizzes, error: quizzesError } = useDataFetching<'quizzes'>({
+    table: 'quizzes',
+    select: 'id, title, description, total_questions, times_played',
+    refreshInterval: 60000, // Refresh every minute
+    revalidateOnFocus: true
+  });
+
+  // Fetch users with 2-minute refresh interval
+  const { data: usersData, loading: loadingUsers, error: usersError } = useDataFetching<'users'>({
+    table: 'users',
+    select: 'id, full_name, email, quizzes_taken, average_score',
+    refreshInterval: 120000, // Refresh every 2 minutes
+    revalidateOnFocus: true
+  });
+
+  // Fetch recent activity with 15-second refresh interval
+  const { data: activityData, loading: loadingActivity, error: activityError } = useDataFetching<'submissions'>({
+    table: 'submissions',
+    select: 'id, user_id, quiz_id, created_at, score, total_possible',
+    orderBy: { column: 'created_at', ascending: false },
+    refreshInterval: 15000, // Refresh every 15 seconds
+    revalidateOnFocus: true
+  });
+
+  // Process dashboard stats
+  const stats = {
+    totalQuizzes: quizzesData.length,
+    totalUsers: usersData.length,
+    totalSubmissions: statsData.length,
+    averageScore: statsData.length > 0 
+      ? statsData.reduce((acc, sub) => acc + (sub.score / sub.total_possible) * 100, 0) / statsData.length 
+      : 0
+  };
+
+  // Process submissions chart data
+  const submissions = quizzesData.map(quiz => ({
+    name: quiz.title,
+    submissions: quiz.times_played || 0
+  }));
+
+  // Process recent activity
+  const activity = activityData.slice(0, 5).map(sub => ({
+    type: 'submission',
+    title: `Quiz Submission`,
+    details: `Score: ${Math.round((sub.score / sub.total_possible) * 100)}%`,
+    time: new Date(sub.created_at || new Date()).toLocaleString(),
+    color: 'blue'
+  }));
+
+  const loading = loadingStats || loadingQuizzes || loadingUsers || loadingActivity;
+  const error = statsError || quizzesError || usersError || activityError;
 
   return (
     <AdminLayout>
@@ -117,7 +121,7 @@ export default function AdminDashboard() {
 
         {loading ? (
           <div className="flex justify-center items-center h-64">
-            <p>Loading dashboard data...</p>
+            <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
           </div>
         ) : error ? (
           <div className="flex justify-center items-center h-64">

@@ -1,6 +1,7 @@
 import useSWR from 'swr'
 import { supabase } from "@/lib/supabase"
 import type { TableRow } from "@/lib/supabase"
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 type TableName = 'quizzes' | 'questions' | 'question_possible_answers' | 'submissions' | 'users' | 'user_answers'
 
@@ -17,11 +18,17 @@ interface UseDataFetchingProps<T extends TableName> {
   select?: string;
   orderBy?: { column: string; ascending?: boolean };
   filter?: Filter;
+  revalidateOnFocus?: boolean;
+  revalidateOnReconnect?: boolean;
+  refreshInterval?: number;
+  dedupingInterval?: number;
+  errorRetryCount?: number;
 }
 
 // Fetcher function for SWR
 const fetcher = async <T extends TableName>(key: string): Promise<TableRow<T>[]> => {
   const [table, select, orderBy, filter] = key.split('|') as [TableName, string, string, string]
+  
   let query = supabase
     .from(table)
     .select(select)
@@ -43,16 +50,41 @@ const fetcher = async <T extends TableName>(key: string): Promise<TableRow<T>[]>
   return (data || []) as unknown as TableRow<T>[]
 }
 
-export function useDataFetching<T extends TableName>({ table, select = '*', orderBy, filter }: UseDataFetchingProps<T>) {
+export function useDataFetching<T extends TableName>({ 
+  table, 
+  select = '*', 
+  orderBy, 
+  filter,
+  revalidateOnFocus = true,
+  revalidateOnReconnect = true,
+  refreshInterval = 0,
+  dedupingInterval = 2000,
+  errorRetryCount = 3
+}: UseDataFetchingProps<T>) {
   // Create a unique key for SWR
-  const key = `${table}|${select}|${orderBy ? `${orderBy.column}:${orderBy.ascending}` : ''}|${filter ? JSON.stringify(filter) : ''}`
+  const key = [
+    table,
+    select,
+    orderBy ? `${orderBy.column}:${orderBy.ascending}` : '',
+    filter ? JSON.stringify(filter) : ''
+  ].join('|')
   
-  const { data, error, isLoading, mutate } = useSWR<TableRow<T>[]>(key, fetcher)
+  const { data, error, isLoading, mutate } = useSWR<TableRow<T>[]>(key, fetcher, {
+    revalidateOnFocus,
+    revalidateOnReconnect,
+    refreshInterval,
+    dedupingInterval,
+    errorRetryCount
+  })
 
   return {
     data: data || [],
     loading: isLoading,
     error: error?.message || null,
-    mutate // Expose mutate function for manual revalidation
+    mutate,
+    updateData: (updater: (data: TableRow<T>[]) => TableRow<T>[]) => {
+      if (!data) return
+      mutate(updater(data), false)
+    }
   }
 }
