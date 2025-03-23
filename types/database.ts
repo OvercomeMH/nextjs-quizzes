@@ -1,12 +1,12 @@
-import type { TableRow } from '@/lib/supabase'
+import type { Database } from '@/lib/database.types';
 
 // Export type aliases for better readability
-export type User = TableRow<'users'>
-export type Quiz = TableRow<'quizzes'>
-export type Question = TableRow<'questions'>
-export type QuestionOption = TableRow<'question_possible_answers'>
-export type Submission = TableRow<'submissions'>
-export type UserAnswer = TableRow<'user_answers'>
+export type User = Database['public']['Tables']['users']['Row'];
+export type Quiz = Database['public']['Tables']['quizzes']['Row'];
+export type Question = Database['public']['Tables']['questions']['Row'];
+export type QuestionOption = Database['public']['Tables']['question_possible_answers']['Row'];
+export type Submission = Database['public']['Tables']['submissions']['Row'];
+export type UserAnswer = Database['public']['Tables']['user_answers']['Row'];
 
 // Common type combinations
 export type QuizWithQuestions = Quiz & {
@@ -15,8 +15,8 @@ export type QuizWithQuestions = Quiz & {
   })[]
 }
 
-export type QuestionWithOptions = Question & {
-  options: QuestionOption[]
+export type QuizWithSubmissions = Quiz & {
+  submissions: Submission[]
 }
 
 export type SubmissionWithAnswers = Submission & {

@@ -1,0 +1,35 @@
+[1mdiff --git a/types/database.ts b/types/database.ts[m
+[1mindex cf1bc25..c539d29 100644[m
+[1m--- a/types/database.ts[m
+[1m+++ b/types/database.ts[m
+[36m@@ -1,12 +1,12 @@[m
+[31m-import type { TableRow } from '@/lib/supabase'[m
+[32m+[m[32mimport type { Database } from '@/lib/database.types';[m
+ [m
+ // Export type aliases for better readability[m
+[31m-export type User = TableRow<'users'>[m
+[31m-export type Quiz = TableRow<'quizzes'>[m
+[31m-export type Question = TableRow<'questions'>[m
+[31m-export type QuestionOption = TableRow<'question_possible_answers'>[m
+[31m-export type Submission = TableRow<'submissions'>[m
+[31m-export type UserAnswer = TableRow<'user_answers'>[m
+[32m+[m[32mexport type User = Database['public']['Tables']['users']['Row'];[m
+[32m+[m[32mexport type Quiz = Database['public']['Tables']['quizzes']['Row'];[m
+[32m+[m[32mexport type Question = Database['public']['Tables']['questions']['Row'];[m
+[32m+[m[32mexport type QuestionOption = Database['public']['Tables']['question_possible_answers']['Row'];[m
+[32m+[m[32mexport type Submission = Database['public']['Tables']['submissions']['Row'];[m
+[32m+[m[32mexport type UserAnswer = Database['public']['Tables']['user_answers']['Row'];[m
+ [m
+ // Common type combinations[m
+ export type QuizWithQuestions = Quiz & {[m
+[36m@@ -15,8 +15,8 @@[m [mexport type QuizWithQuestions = Quiz & {[m
+   })[][m
+ }[m
+ [m
+[31m-export type QuestionWithOptions = Question & {[m
+[31m-  options: QuestionOption[][m
+[32m+[m[32mexport type QuizWithSubmissions = Quiz & {[m
+[32m+[m[32m  submissions: Submission[][m
+ }[m
+ [m
+ export type SubmissionWithAnswers = Submission & {[m

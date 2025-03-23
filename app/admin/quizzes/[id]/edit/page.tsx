@@ -17,10 +17,21 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Plus, Trash2, Save, AlertCircle, ArrowLeft } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import ProtectedRoute from "@/components/auth/ProtectedRoute"
-import { Quiz, Question, QuestionOption, QuizWithQuestions } from "@/types/database"
 import { useDataFetching } from "@/hooks/useDataFetching"
 import { AdminLayout } from "@/components/layouts/AdminLayout"
+import type { Database } from '@/lib/database.types'
+
+// Define types for our data
+type Quiz = Database['public']['Tables']['quizzes']['Row'];
+type Question = Database['public']['Tables']['questions']['Row'];
+type QuestionOption = Database['public']['Tables']['question_possible_answers']['Row'];
+
+// Define the type for our joined data
+type QuizWithDetails = Quiz & {
+  questions: (Question & {
+    question_possible_answers: QuestionOption[];
+  })[];
+};
 
 // Types for our form
 interface QuizFormQuestion {
@@ -75,22 +86,26 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
   const [success, setSuccess] = useState<boolean>(false);
 
   // Fetch quiz data using our hook
-  const { data: quizData, loading, error: fetchError } = useDataFetching<'quizzes'>({
+  const { data: quizData, loading, error: fetchError } = useDataFetching<'quizzes', [], [], [
+    {
+      table: 'questions',
+      on: 'quiz_id',
+      orderBy: { column: 'order_num', ascending: true }
+    },
+    {
+      table: 'question_possible_answers',
+      on: 'question_id',
+      orderBy: { column: 'order_num', ascending: true }
+    }
+  ]>({
     table: 'quizzes',
-    select: `
-      *,
-      questions:questions (
-        *,
-        options:question_possible_answers (*)
-      )
-    `,
     filter: { column: 'id', operator: 'eq', value: quizId }
   });
 
   // Update form when quiz data changes
   useEffect(() => {
     if (quizData?.[0]) {
-      const quiz = quizData[0] as QuizWithQuestions;
+      const quiz = quizData[0] as QuizWithDetails;
       setQuizTitle(quiz.title);
       setQuizDescription(quiz.description || '');
       setCategory(quiz.category || '');
@@ -98,11 +113,11 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
       setTimeLimit(Math.round((quiz.time_limit || 600) / 60).toString()); // Convert seconds to minutes
 
       // Format questions for our UI
-      const formattedQuestions: QuizFormQuestion[] = quiz.questions.map((question: Question & { options: QuestionOption[] }, index: number) => ({
+      const formattedQuestions: QuizFormQuestion[] = quiz.questions.map((question: Question & { question_possible_answers: QuestionOption[] }, index: number) => ({
         id: question.id,
         text: question.text,
         type: question.type || 'multiple_choice',
-        options: question.options.map((option: QuestionOption) => ({
+        options: question.question_possible_answers.map((option: QuestionOption) => ({
           id: option.option_id,
           text: option.text,
           question_id: option.question_id,

@@ -9,29 +9,21 @@ import { Badge } from "@/components/ui/badge"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { AdminLayout } from "@/components/layouts/AdminLayout"
 import { useDataFetching } from "@/hooks/useDataFetching"
+import type { Database } from '@/lib/database.types';
 
-// Updated interface definitions to match our API responses
-interface Quiz {
-  id: string;
-  title: string;
-  description: string;
-  questions: number;
-  submissions: number;
-  averageScore: number;
-}
+// Define types for our data
+type User = Database['public']['Tables']['users']['Row'];
+type Quiz = Database['public']['Tables']['quizzes']['Row'];
+type Submission = Database['public']['Tables']['submissions']['Row'];
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  quizzesTaken: number;
-  averageScore: number;
-}
+// Define types for joined data
+type QuizWithSubmissions = Quiz & {
+  submissions: Submission[];
+};
 
-interface Submission {
-  name: string;
-  submissions: number;
-}
+type SubmissionWithUser = Submission & {
+  users: User;
+};
 
 interface DashboardStats {
   totalQuizzes: number;
@@ -49,35 +41,37 @@ interface Activity {
 }
 
 export default function AdminDashboard() {
-  // Fetch dashboard stats with 30-second refresh interval
-  const { data: statsData, loading: loadingStats, error: statsError } = useDataFetching<'submissions'>({
-    table: 'submissions',
-    select: 'id, score, total_possible',
-    refreshInterval: 30000, // Refresh every 30 seconds
-    revalidateOnFocus: true,
-    revalidateOnReconnect: true
-  });
-
-  // Fetch quizzes with 1-minute refresh interval
-  const { data: quizzesData, loading: loadingQuizzes, error: quizzesError } = useDataFetching<'quizzes'>({
+  // Fetch all data with joins in a single call
+  const { data: quizzes, loading: loadingQuizzes, error: quizzesError } = useDataFetching<'quizzes', [], [], [
+    {
+      table: 'submissions',
+      on: 'quiz_id'
+    }
+  ]>({
     table: 'quizzes',
-    select: 'id, title, description, total_questions, times_played',
     refreshInterval: 60000, // Refresh every minute
     revalidateOnFocus: true
   });
 
   // Fetch users with 2-minute refresh interval
-  const { data: usersData, loading: loadingUsers, error: usersError } = useDataFetching<'users'>({
+  const { data: users, loading: loadingUsers, error: usersError } = useDataFetching<'users'>({
     table: 'users',
-    select: 'id, full_name, email, quizzes_taken, average_score',
     refreshInterval: 120000, // Refresh every 2 minutes
     revalidateOnFocus: true
   });
 
-  // Fetch recent activity with 15-second refresh interval
-  const { data: activityData, loading: loadingActivity, error: activityError } = useDataFetching<'submissions'>({
+  // Fetch recent activity with joins
+  const { data: submissions, loading: loadingSubmissions, error: submissionsError } = useDataFetching<'submissions', [], [], [
+    {
+      table: 'users',
+      on: 'user_id'
+    },
+    {
+      table: 'quizzes',
+      on: 'quiz_id'
+    }
+  ]>({
     table: 'submissions',
-    select: 'id, user_id, quiz_id, created_at, score, total_possible',
     orderBy: { column: 'created_at', ascending: false },
     refreshInterval: 15000, // Refresh every 15 seconds
     revalidateOnFocus: true
@@ -85,31 +79,35 @@ export default function AdminDashboard() {
 
   // Process dashboard stats
   const stats = {
-    totalQuizzes: quizzesData.length,
-    totalUsers: usersData.length,
-    totalSubmissions: statsData.length,
-    averageScore: statsData.length > 0 
-      ? statsData.reduce((acc, sub) => acc + (sub.score / sub.total_possible) * 100, 0) / statsData.length 
+    totalQuizzes: Array.isArray(quizzes) ? quizzes.length : 0,
+    totalUsers: Array.isArray(users) ? users.length : 0,
+    totalSubmissions: Array.isArray(submissions) ? submissions.length : 0,
+    averageScore: Array.isArray(submissions) && submissions.length > 0 
+      ? submissions.reduce((acc: number, sub: Submission) => acc + (sub.score / sub.total_possible) * 100, 0) / submissions.length 
       : 0
   };
 
   // Process submissions chart data
-  const submissions = quizzesData.map(quiz => ({
-    name: quiz.title,
-    submissions: quiz.times_played || 0
-  }));
+  const submissionsChartData = Array.isArray(quizzes) 
+    ? quizzes.map((quiz: QuizWithSubmissions) => ({
+        name: quiz.title,
+        submissions: quiz.submissions?.length || 0
+      }))
+    : [];
 
   // Process recent activity
-  const activity = activityData.slice(0, 5).map(sub => ({
-    type: 'submission',
-    title: `Quiz Submission`,
-    details: `Score: ${Math.round((sub.score / sub.total_possible) * 100)}%`,
-    time: new Date(sub.created_at || new Date()).toLocaleString(),
-    color: 'blue'
-  }));
+  const activity = Array.isArray(submissions) 
+    ? submissions.slice(0, 5).map((sub: SubmissionWithUser & { quizzes: Quiz }) => ({
+        type: 'submission',
+        title: `${sub.users?.full_name || 'Anonymous'} completed ${sub.quizzes?.title || 'a quiz'}`,
+        details: `Score: ${Math.round((sub.score / sub.total_possible) * 100)}%`,
+        time: new Date(sub.created_at || new Date()).toLocaleString(),
+        color: 'blue'
+      }))
+    : [];
 
-  const loading = loadingStats || loadingQuizzes || loadingUsers || loadingActivity;
-  const error = statsError || quizzesError || usersError || activityError;
+  const loading = loadingQuizzes || loadingUsers || loadingSubmissions;
+  const error = quizzesError || usersError || submissionsError;
 
   return (
     <AdminLayout>
@@ -174,9 +172,9 @@ export default function AdminDashboard() {
                 </CardHeader>
                 <CardContent className="pl-2">
                   <div className="h-[300px]">
-                    {submissions.length > 0 ? (
+                    {submissionsChartData.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={submissions}>
+                        <BarChart data={submissionsChartData}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="name" />
                           <YAxis />
@@ -201,7 +199,7 @@ export default function AdminDashboard() {
                 <CardContent>
                   {activity.length > 0 ? (
                     <div className="space-y-4">
-                      {activity.map((item, index) => (
+                      {activity.map((item: Activity, index: number) => (
                         <div key={index} className={`border-l-4 border-${item.color}-500 pl-4 py-2`}>
                           <p className="text-sm font-medium">{item.title}</p>
                           <p className="text-xs text-muted-foreground">{item.details && `${item.details} • `}{item.time}</p>

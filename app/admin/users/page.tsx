@@ -6,27 +6,47 @@ import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { User } from "@/types/database"
 import { useDataFetching } from "@/hooks/useDataFetching"
 import { AdminLayout } from "@/components/layouts/AdminLayout"
+import type { Database } from '@/lib/database.types'
+
+// Define types for our data
+type User = Database['public']['Tables']['users']['Row'];
+type Submission = Database['public']['Tables']['submissions']['Row'];
+
+// Define the type for our joined data
+type UserWithSubmissions = User & {
+  submissions: Submission[];
+};
 
 export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState("")
   
-  // Fetch users using our hook
-  const { data: users, loading, error } = useDataFetching<'users'>({
+  // Fetch users with joined submissions data
+  const { data: users, loading, error } = useDataFetching<'users', [], [], [
+    {
+      table: 'submissions',
+      on: 'user_id'
+    }
+  ]>({
     table: 'users',
-    select: 'id, full_name, email, quizzes_taken, total_points',
     orderBy: { column: 'created_at', ascending: false }
   });
 
   // Filter users when search query changes
   const filteredUsers = searchQuery.trim() === "" 
     ? users 
-    : users.filter(user => 
+    : users.filter((user: UserWithSubmissions) => 
         user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
         user.email.toLowerCase().includes(searchQuery.toLowerCase())
       );
+
+  // Calculate average score for a user
+  const calculateAverageScore = (user: UserWithSubmissions) => {
+    if (!user.submissions?.length) return 0;
+    return user.submissions.reduce((acc, sub) => 
+      acc + (sub.score / sub.total_possible) * 100, 0) / user.submissions.length;
+  };
 
   return (
     <AdminLayout>
@@ -74,13 +94,15 @@ export default function UsersPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredUsers.map((user) => (
+                      {filteredUsers.map((user: UserWithSubmissions) => (
                         <tr key={user.id} className="border-t">
                           <td className="p-4 font-medium">{user.full_name || 'N/A'}</td>
                           <td className="p-4">{user.email}</td>
-                          <td className="p-4">{user.quizzes_taken || 0}</td>
+                          <td className="p-4">{user.submissions?.length || 0}</td>
                           <td className="p-4">
-                            {user.average_score !== null && user.average_score > 0 ? `${user.average_score.toFixed(1)}%` : "N/A"}
+                            {user.submissions?.length > 0 
+                              ? `${calculateAverageScore(user).toFixed(1)}%` 
+                              : "N/A"}
                           </td>
                           <td className="p-4">
                             <div className="flex gap-2">

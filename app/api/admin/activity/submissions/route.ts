@@ -1,61 +1,43 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import 'server-only';
+import type { Database } from '@/lib/database.types';
 
-interface SubmissionWithQuiz {
-  quiz_id: string;
+type SubmissionWithQuiz = Database['public']['Tables']['submissions']['Row'] & {
   quizzes?: {
     title?: string;
-  };
+  } | null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // Get all quiz submissions
-    const { data: submissions, error: submissionsError } = await supabase
+    const { data: submissions, error } = await supabase
       .from('submissions')
       .select(`
         quiz_id,
-        quizzes(title)
-      `);
-    
-    if (submissionsError) {
-      console.error('Error fetching submissions:', submissionsError);
-      throw submissionsError;
+        quizzes (
+          title
+        )
+      `)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) {
+      console.error('Error fetching submissions:', error);
+      return NextResponse.json({ error: 'Failed to fetch submissions' }, { status: 500 });
     }
-    
-    if (!submissions) {
-      return NextResponse.json([]);
-    }
-    
-    // Count submissions per quiz
-    const submissionCounts: Record<string, number> = {};
-    const quizTitles: Record<string, string> = {};
-    
-    (submissions as SubmissionWithQuiz[]).forEach(submission => {
-      const quizId = submission.quiz_id;
-      // If the quiz title exists in the joined data, use it, otherwise use a placeholder
-      const quizTitle = submission.quizzes?.title || 'Unknown Quiz';
-      
-      submissionCounts[quizId] = (submissionCounts[quizId] || 0) + 1;
-      quizTitles[quizId] = quizTitle;
+
+    // Group submissions by quiz
+    const quizSubmissions: Record<string, number> = {};
+    submissions?.forEach(sub => {
+      if (sub.quiz_id && sub.quizzes?.title) {
+        quizSubmissions[sub.quizzes.title] = (quizSubmissions[sub.quizzes.title] || 0) + 1;
+      }
     });
-    
-    // Format data for the chart
-    const submissionsData = Object.keys(submissionCounts)
-      .map(quizId => ({
-        name: quizTitles[quizId],
-        submissions: submissionCounts[quizId]
-      }))
-      .sort((a, b) => b.submissions - a.submissions)
-      .slice(0, 5); // Get top 5
-    
-    return NextResponse.json(submissionsData);
+
+    return NextResponse.json(quizSubmissions);
   } catch (error) {
-    console.error('Error fetching submissions chart data:', error);
-    return NextResponse.json(
-      { error: 'An error occurred while fetching submissions data' },
-      { status: 500 }
-    );
+    console.error('Error in submissions route:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 } 

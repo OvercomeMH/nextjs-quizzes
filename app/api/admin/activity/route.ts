@@ -2,34 +2,21 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { formatDistanceToNow } from 'date-fns';
 import 'server-only';
+import type { Database } from '@/lib/database.types';
 
 // Define interfaces for the data we'll be working with
-interface SubmissionWithDetails {
-  id: string;
-  user_id: string;
-  quiz_id: string;
-  score: number;
-  total_possible: number;
-  created_at: string;
+type SubmissionWithDetails = Database['public']['Tables']['submissions']['Row'] & {
   users?: {
-    full_name?: string;
-  };
+    full_name: string | null;
+  } | null;
   quizzes?: {
-    title?: string;
-  };
+    title: string | null;
+  } | null;
 }
 
-interface UserWithDetails {
-  id: string;
-  full_name: string;
-  created_at: string;
-}
+type UserWithDetails = Database['public']['Tables']['users']['Row'];
 
-interface QuizWithDetails {
-  id: string;
-  title: string;
-  created_at: string;
-}
+type QuizWithDetails = Database['public']['Tables']['quizzes']['Row'];
 
 interface ActivityItem {
   id: string;
@@ -37,10 +24,10 @@ interface ActivityItem {
   title: string;
   details: string;
   time: string;
-  timestamp: string;
+  timestamp: string | null;
   color: string;
-  user_id?: string;
-  quiz_id?: string;
+  user_id?: string | null;
+  quiz_id?: string | null;
 }
 
 interface DateFilter {
@@ -129,17 +116,7 @@ export async function GET(request: Request) {
       }
       
       // Format submissions
-      submissionActivities = (recentSubmissions as SubmissionWithDetails[]).map(submission => ({
-        id: submission.id,
-        type: 'submission',
-        title: `${submission.users?.full_name || 'Anonymous'} completed "${submission.quizzes?.title || 'Unknown Quiz'}"`,
-        details: `Score: ${submission.score}/${submission.total_possible}`,
-        time: formatTimeAgo(submission.created_at),
-        timestamp: submission.created_at,
-        color: 'green',
-        user_id: submission.user_id,
-        quiz_id: submission.quiz_id
-      }));
+      submissionActivities = formatActivityItems(recentSubmissions as SubmissionWithDetails[]);
     }
     
     // Conditionally fetch user registrations
@@ -267,7 +244,7 @@ export async function GET(request: Request) {
     
     // Sort by timestamp (newest first)
     allActivities.sort((a, b) => 
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      new Date(b.timestamp || '').getTime() - new Date(a.timestamp || '').getTime()
     );
     
     // For mixed activity types, we need to handle pagination after combining
@@ -299,11 +276,27 @@ export async function GET(request: Request) {
 }
 
 // Helper function to format time
-function formatTimeAgo(dateString: string): string {
+function formatTimeAgo(dateString: string | null): string {
   try {
+    if (!dateString) return 'recently';
     return formatDistanceToNow(new Date(dateString), { addSuffix: true });
   } catch (error) {
     console.error('Error formatting date:', error);
     return 'recently';
   }
+}
+
+// Helper function to format activity items
+function formatActivityItems(submissions: SubmissionWithDetails[]): ActivityItem[] {
+  return submissions.map(sub => ({
+    id: sub.id,
+    type: 'submission' as const,
+    title: sub.quizzes?.title || 'Unknown Quiz',
+    details: `${sub.score}/${sub.total_possible} points`,
+    time: sub.created_at ? formatDistanceToNow(new Date(sub.created_at), { addSuffix: true }) : 'Unknown time',
+    timestamp: sub.created_at,
+    color: 'blue',
+    user_id: sub.user_id,
+    quiz_id: sub.quiz_id
+  }));
 } 

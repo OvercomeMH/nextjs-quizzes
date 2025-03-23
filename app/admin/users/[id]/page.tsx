@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
@@ -9,26 +9,29 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowLeft, User, Mail, Calendar, Award, Clock } from "lucide-react"
 import React from "react"
+import type { Database } from '@/lib/database.types';
+import { useDataFetching } from "@/hooks/useDataFetching";
 
-// Define types for user data
-interface UserSubmission {
-  id: string;
-  quizId: string;
-  quizTitle: string;
-  quizDifficulty: string;
-  score: number;
-  totalPossible: number;
-  percentage: number;
-  timeSpent: string;
-  completedAt: string;
-}
+// Define types for our data
+type User = Database['public']['Tables']['users']['Row'];
+type Submission = Database['public']['Tables']['submissions']['Row'];
+type Quiz = Database['public']['Tables']['quizzes']['Row'];
 
-interface UserDetails {
-  id: string;
-  username: string;
-  name: string;
-  email: string;
-  joinedAt: string;
+// Define the type for our joined data
+type UserWithSubmissions = User & {
+  submissions: (Submission & {
+    quizzes: Quiz;
+  })[];
+};
+
+type UserSubmission = Submission & {
+  quizzes: Quiz;
+  // Computed properties for display
+  displayTimeSpent?: string;
+  percentage?: number;
+};
+
+type UserDetails = User & {
   stats: {
     quizzesTaken: number;
     averageScore: number;
@@ -40,44 +43,38 @@ interface UserDetails {
     publicProfile: boolean;
   };
   recentSubmissions: UserSubmission[];
-}
+  // Computed properties for display
+  displayName?: string;
+  joinedAt?: string;
+};
 
 export default function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   // Unwrap params using React.use()
   const unwrappedParams = React.use(params);
   const userId = unwrappedParams.id;
-  const [user, setUser] = useState<UserDetails | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  
+  // Use the useDataFetching hook to fetch user details with joined submissions and quizzes
+  const { data: users, loading, error } = useDataFetching<'users', [], [], [
+    {
+      table: 'submissions',
+      on: 'user_id',
+      orderBy: { column: 'created_at', ascending: false }
+    },
+    {
+      table: 'quizzes',
+      on: 'quiz_id'
+    }
+  ]>({
+    table: 'users',
+    filter: {
+      column: 'id',
+      operator: 'eq',
+      value: userId
+    }
+  });
 
-  useEffect(() => {
-    const fetchUserDetails = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`/api/admin/users/${userId}`);
-        
-        if (!response.ok) {
-          if (response.status === 404) {
-            setError("User not found");
-          } else {
-            setError("Failed to load user details");
-          }
-          setLoading(false);
-          return;
-        }
-        
-        const userData = await response.json();
-        setUser(userData);
-        setLoading(false);
-      } catch (err) {
-        console.error("Error fetching user details:", err);
-        setError("An error occurred while loading user details");
-        setLoading(false);
-      }
-    };
-    
-    fetchUserDetails();
-  }, [userId]);
+  // Get the first (and only) user from the array
+  const rawUser = users?.[0] as UserWithSubmissions;
 
   // Format date helper function
   const formatDate = (dateString: string) => {
@@ -101,6 +98,46 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         return 'bg-gray-100 text-gray-800';
     }
   };
+
+  // Format user data for display
+  const formattedUser = rawUser ? {
+    ...rawUser,
+    displayName: rawUser.full_name || 'Unknown User',
+    joinedAt: rawUser.created_at,
+    stats: {
+      quizzesTaken: rawUser.quizzes_taken || 0,
+      averageScore: rawUser.average_score || 0,
+      totalPoints: rawUser.total_points || 0,
+      rank: rawUser.rank || 'Beginner'
+    },
+    preferences: {
+      emailNotifications: rawUser.email_notifications || false,
+      publicProfile: rawUser.public_profile || false
+    },
+    recentSubmissions: (rawUser.submissions || []).slice(0, 10).map(submission => ({
+      ...submission,
+      displayTimeSpent: submission.time_spent ? `${Math.floor(submission.time_spent / 60)}m ${submission.time_spent % 60}s` : 'Unknown',
+      percentage: Math.round((submission.score / submission.total_possible) * 100)
+    })) as UserSubmission[]
+  } : null;
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p>Loading user details...</p>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p className="text-red-500">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -141,15 +178,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           <h1 className="text-2xl font-bold">User Details</h1>
         </div>
 
-        {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <p>Loading user details...</p>
-          </div>
-        ) : error ? (
-          <div className="flex justify-center items-center h-64">
-            <p className="text-red-500">{error}</p>
-          </div>
-        ) : user ? (
+        {formattedUser ? (
           <div className="grid gap-6 md:grid-cols-3">
             {/* User Profile Card */}
             <Card className="md:col-span-1">
@@ -162,145 +191,97 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                   <User className="h-5 w-5 text-gray-500" />
                   <div>
                     <p className="text-sm font-medium">Name</p>
-                    <p className="text-sm text-gray-500">{user.name}</p>
+                    <p className="text-sm text-gray-500">{formattedUser.displayName}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
                   <Mail className="h-5 w-5 text-gray-500" />
                   <div>
                     <p className="text-sm font-medium">Email</p>
-                    <p className="text-sm text-gray-500">{user.email}</p>
+                    <p className="text-sm text-gray-500">{formattedUser.email}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
                   <Calendar className="h-5 w-5 text-gray-500" />
                   <div>
                     <p className="text-sm font-medium">Joined</p>
-                    <p className="text-sm text-gray-500">{formatDate(user.joinedAt)}</p>
+                    <p className="text-sm text-gray-500">
+                      Joined {formattedUser.joinedAt ? format(new Date(formattedUser.joinedAt), 'MMMM yyyy') : 'Unknown'}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
                   <Award className="h-5 w-5 text-gray-500" />
                   <div>
                     <p className="text-sm font-medium">Rank</p>
-                    <p className="text-sm text-gray-500">{user.stats.rank}</p>
+                    <p className="text-sm text-gray-500">{formattedUser.stats.rank}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* User Stats and Recent Submissions */}
-            <div className="md:col-span-2 space-y-6">
-              {/* Stats Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
-                  <CardHeader className="py-4">
-                    <CardTitle className="text-sm font-medium">Quizzes Taken</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{user.stats.quizzesTaken}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="py-4">
-                    <CardTitle className="text-sm font-medium">Average Score</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{user.stats.averageScore}%</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="py-4">
-                    <CardTitle className="text-sm font-medium">Total Points</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{user.stats.totalPoints}</div>
-                  </CardContent>
-                </Card>
-              </div>
+            {/* User Stats Card */}
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle>Statistics</CardTitle>
+                <CardDescription>User performance metrics</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{formattedUser.stats.quizzesTaken}</p>
+                    <p className="text-sm text-gray-500">Quizzes Taken</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{formattedUser.stats.averageScore}%</p>
+                    <p className="text-sm text-gray-500">Average Score</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{formattedUser.stats.totalPoints}</p>
+                    <p className="text-sm text-gray-500">Total Points</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{formattedUser.stats.rank}</p>
+                    <p className="text-sm text-gray-500">Current Rank</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-              {/* Tabs with Recent Submissions */}
-              <Tabs defaultValue="submissions" className="space-y-4">
-                <TabsList>
-                  <TabsTrigger value="submissions">Recent Submissions</TabsTrigger>
-                  <TabsTrigger value="preferences">User Preferences</TabsTrigger>
-                </TabsList>
-                <TabsContent value="submissions">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Recent Quiz Submissions</CardTitle>
-                      <CardDescription>The last {user.recentSubmissions.length} quizzes taken by this user</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {user.recentSubmissions.length > 0 ? (
-                        <div className="space-y-4">
-                          {user.recentSubmissions.map((submission) => (
-                            <div key={submission.id} className="border rounded-lg p-4">
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <h3 className="font-medium">{submission.quizTitle}</h3>
-                                  <div className="flex items-center space-x-2 mt-1">
-                                    <Badge className={getDifficultyColor(submission.quizDifficulty)}>
-                                      {submission.quizDifficulty}
-                                    </Badge>
-                                    <div className="flex items-center text-sm text-gray-500">
-                                      <Clock className="h-3 w-3 mr-1" />
-                                      {submission.timeSpent}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-lg font-bold">
-                                    {submission.score}/{submission.totalPossible}
-                                  </div>
-                                  <div className={`text-sm ${
-                                    submission.percentage >= 80 ? 'text-green-500' : 
-                                    submission.percentage >= 60 ? 'text-yellow-500' : 'text-red-500'
-                                  }`}>
-                                    {submission.percentage}%
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="text-xs text-gray-500 mt-2">
-                                Completed on {formatDate(submission.completedAt)}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-10">
-                          <p className="text-gray-500">No submissions found for this user</p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-                <TabsContent value="preferences">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>User Preferences</CardTitle>
-                      <CardDescription>Account settings and preferences</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium">Email Notifications</span>
-                          <Badge variant={user.preferences.emailNotifications ? "default" : "outline"}>
-                            {user.preferences.emailNotifications ? "Enabled" : "Disabled"}
-                          </Badge>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium">Public Profile</span>
-                          <Badge variant={user.preferences.publicProfile ? "default" : "outline"}>
-                            {user.preferences.publicProfile ? "Enabled" : "Disabled"}
-                          </Badge>
-                        </div>
+            {/* Recent Submissions Card */}
+            <Card className="md:col-span-3">
+              <CardHeader>
+                <CardTitle>Recent Submissions</CardTitle>
+                <CardDescription>Latest quiz attempts</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {formattedUser.recentSubmissions.map((submission) => (
+                    <div key={submission.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <h3 className="font-medium">{submission.quizzes.title}</h3>
+                        <p className="text-sm text-gray-500">
+                          Score: {submission.score}/{submission.total_possible} ({submission.percentage}%)
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Time: {submission.displayTimeSpent}
+                        </p>
                       </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              </Tabs>
-            </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={getDifficultyColor(submission.quizzes.difficulty)}>
+                          {submission.quizzes.difficulty}
+                        </Badge>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/admin/quizzes/${submission.quiz_id}/submissions/${submission.id}`}>
+                            View Details
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         ) : (
           <div className="flex justify-center items-center h-64">

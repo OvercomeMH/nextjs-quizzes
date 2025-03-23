@@ -1,18 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import 'server-only';
+import type { Database } from '@/lib/database.types';
 
-interface SubmissionWithQuiz {
-  id: string;
-  quiz_id: string;
-  score: number;
-  total_possible: number;
-  time_spent: number | null;
-  created_at: string;
+type SubmissionWithQuiz = Database['public']['Tables']['submissions']['Row'] & {
   quizzes?: {
     title?: string;
     difficulty?: string;
-  };
+  } | null;
 }
 
 export async function GET(

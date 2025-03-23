@@ -8,28 +8,48 @@ import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { QuizSummary } from "@/types/database"
 import { useDataFetching } from "@/hooks/useDataFetching"
+import type { Database } from '@/lib/database.types'
+
+// Define types for our data
+type Quiz = Database['public']['Tables']['quizzes']['Row'];
+type Submission = Database['public']['Tables']['submissions']['Row'];
 
 export default function QuizzesPage() {
   const { user } = useAuth();
   
-  // Fetch all quizzes
-  const { data: allQuizzes, loading: loadingQuizzes } = useDataFetching<'quizzes'>({
+  // Fetch all quizzes with joined submissions
+  const { data: allQuizzes, loading: loadingQuizzes, error: quizzesError } = useDataFetching<'quizzes', [], [], [
+    {
+      table: 'submissions',
+      on: 'quiz_id'
+    }
+  ]>({
     table: 'quizzes',
-    select: 'id, title, description, difficulty, total_questions, average_rating',
     orderBy: { column: 'created_at', ascending: false }
   });
 
   // Fetch user's submissions if logged in
-  const { data: userSubmissions } = useDataFetching<'submissions'>({
+  const { data: userSubmissions, error: submissionsError } = useDataFetching<'submissions'>({
     table: 'submissions',
-    select: 'quiz_id',
     filter: user ? { column: 'user_id', operator: 'eq', value: user.id } : undefined
   });
 
+  // Debug logging
+  console.log('All Quizzes:', allQuizzes);
+  console.log('User Submissions:', userSubmissions);
+  console.log('Quizzes Error:', quizzesError);
+  console.log('Submissions Error:', submissionsError);
+  console.log('Is allQuizzes an array?', Array.isArray(allQuizzes));
+  console.log('Number of quizzes:', Array.isArray(allQuizzes) ? allQuizzes.length : 0);
+  console.log('Is userSubmissions an array?', Array.isArray(userSubmissions));
+  console.log('Number of user submissions:', Array.isArray(userSubmissions) ? userSubmissions.length : 0);
+
   // Filter out quizzes the user has already taken
-  const availableQuizzes = allQuizzes.filter(quiz => 
-    !userSubmissions.some(sub => sub.quiz_id === quiz.id)
-  );
+  const availableQuizzes = Array.isArray(allQuizzes) 
+    ? allQuizzes.filter(quiz => 
+        !Array.isArray(userSubmissions) || !userSubmissions.some(sub => sub.quiz_id === quiz.id)
+      )
+    : [];
 
   const loading = loadingQuizzes;
 
@@ -57,6 +77,10 @@ export default function QuizzesPage() {
       {loading ? (
         <div className="flex justify-center items-center h-64">
           <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
+        </div>
+      ) : quizzesError ? (
+        <div className="flex justify-center items-center h-64">
+          <p className="text-red-500">Error loading quizzes: {quizzesError}</p>
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

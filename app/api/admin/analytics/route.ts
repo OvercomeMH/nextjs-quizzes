@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import 'server-only';
+import type { Database } from '@/lib/database.types';
 
 interface QuizStat {
   name: string;
@@ -18,21 +19,53 @@ interface DailyStat {
   submissions: number;
 }
 
-interface QuizSubmissionCount {
-  [quizId: string]: number;
-}
+type QuizSubmissionCount = Record<string, number>;
 
 interface QuizScoreData {
   total: number;
   count: number;
 }
 
-interface QuizScores {
-  [quizId: string]: QuizScoreData;
-}
+type QuizScores = Record<string, QuizScoreData>;
 
 interface CategoryCount {
-  [category: string]: number;
+  category: string;
+  count: number;
+}
+
+interface DifficultyCount {
+  difficulty: string;
+  count: number;
+}
+
+interface QuizStats {
+  totalQuizzes: number;
+  totalSubmissions: number;
+  averageScore: number;
+  categoryDistribution: CategoryCount[];
+  difficultyDistribution: DifficultyCount[];
+  submissionsByQuiz: QuizSubmissionCount;
+  scoresByQuiz: QuizScores;
+}
+
+// Helper function to safely get quiz ID
+function getQuizId(quiz: Database['public']['Tables']['quizzes']['Row']): string {
+  return quiz.id || '';
+}
+
+// Helper function to safely get category
+function getCategory(quiz: Database['public']['Tables']['quizzes']['Row']): string {
+  return quiz.category || 'Uncategorized';
+}
+
+// Helper function to safely get difficulty
+function getDifficulty(quiz: Database['public']['Tables']['quizzes']['Row']): string {
+  return quiz.difficulty || 'Unknown';
+}
+
+// Helper function to safely parse date
+function parseDate(dateString: string | null): Date {
+  return dateString ? new Date(dateString) : new Date();
 }
 
 export async function GET() {
@@ -40,7 +73,7 @@ export async function GET() {
     // 1. Get total quiz count
     const { data: quizzes, error: quizzesError } = await supabase
       .from('quizzes')
-      .select('id, title, category, difficulty, times_played, average_rating, total_points');
+      .select('*');
     
     if (quizzesError) {
       console.error('Error fetching quizzes:', quizzesError);
@@ -93,7 +126,9 @@ export async function GET() {
     // Count submissions per quiz
     if (submissions) {
       submissions.forEach(sub => {
-        quizSubmissionCounts[sub.quiz_id] = (quizSubmissionCounts[sub.quiz_id] || 0) + 1;
+        if (sub.quiz_id) {
+          quizSubmissionCounts[sub.quiz_id] = (quizSubmissionCounts[sub.quiz_id] || 0) + 1;
+        }
       });
     }
     
@@ -101,23 +136,25 @@ export async function GET() {
     const quizScores: QuizScores = {};
     if (submissions) {
       submissions.forEach(sub => {
-        if (!quizScores[sub.quiz_id]) {
-          quizScores[sub.quiz_id] = {
-            total: 0,
-            count: 0
-          };
+        if (sub.quiz_id) {
+          if (!quizScores[sub.quiz_id]) {
+            quizScores[sub.quiz_id] = {
+              total: 0,
+              count: 0
+            };
+          }
+          quizScores[sub.quiz_id].total += (sub.score / sub.total_possible * 100);
+          quizScores[sub.quiz_id].count += 1;
         }
-        quizScores[sub.quiz_id].total += (sub.score / sub.total_possible * 100);
-        quizScores[sub.quiz_id].count += 1;
       });
     }
     
     // Build quiz stats array
     if (quizzes) {
       quizzes.forEach(quiz => {
-        const submissions = quizSubmissionCounts[quiz.id] || 0;
-        const avgScore = quizScores[quiz.id] 
-          ? Math.round(quizScores[quiz.id].total / quizScores[quiz.id].count) 
+        const submissions = quizSubmissionCounts[getQuizId(quiz)] || 0;
+        const avgScore = quizScores[getQuizId(quiz)] 
+          ? Math.round(quizScores[getQuizId(quiz)].total / quizScores[getQuizId(quiz)].count) 
           : 0;
         
         quizStats.push({
@@ -133,22 +170,21 @@ export async function GET() {
     const topQuizStats = quizStats.slice(0, 5);
     
     // Process category stats
-    const categoryCount: CategoryCount = {};
+    const categoryCounts: CategoryCount[] = [];
     if (quizzes) {
       quizzes.forEach(quiz => {
-        const category = quiz.category || 'Uncategorized';
-        categoryCount[category] = (categoryCount[category] || 0) + 1;
+        const category = getCategory(quiz);
+        const existingCategory = categoryCounts.find(c => c.category === category);
+        if (existingCategory) {
+          existingCategory.count++;
+        } else {
+          categoryCounts.push({ category, count: 1 });
+        }
       });
     }
     
-    // Convert to array format
-    const categoryStats: CategoryStat[] = Object.entries(categoryCount).map(([name, count]) => ({
-      name,
-      count
-    }));
-    
     // Sort by count descending
-    categoryStats.sort((a, b) => b.count - a.count);
+    categoryCounts.sort((a, b) => b.count - a.count);
     
     // Process daily submissions for the past week
     const dailyStats: DailyStat[] = [];
@@ -161,7 +197,7 @@ export async function GET() {
       
       // Count submissions for this day
       const daySubmissions = submissions ? submissions.filter(sub => {
-        const subDate = new Date(sub.created_at);
+        const subDate = parseDate(sub.created_at);
         return subDate.getDate() === date.getDate() && 
                subDate.getMonth() === date.getMonth() && 
                subDate.getFullYear() === date.getFullYear();
@@ -176,7 +212,7 @@ export async function GET() {
     // Build the analytics response
     const analyticsData = {
       quizStats: topQuizStats,
-      categoryStats,
+      categoryStats: categoryCounts,
       dailyStats,
       totalQuizzes,
       totalSubmissions,

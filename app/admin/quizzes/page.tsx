@@ -7,34 +7,42 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input"
 import { useDataFetching } from "@/hooks/useDataFetching"
 import { AdminLayout } from "@/components/layouts/AdminLayout"
-import type { TableRow } from "@/lib/supabase"
+import type { Database } from "@/lib/database.types"
 
-interface QuizWithSubmissions extends TableRow<'quizzes'> {
-  submissions: { count: number }[];
-}
+// Define types for our data
+type Quiz = Database['public']['Tables']['quizzes']['Row'];
+type Submission = Database['public']['Tables']['submissions']['Row'];
+
+// Define the type for our joined data
+type QuizWithSubmissions = Quiz & {
+  submissions: Submission[];
+};
 
 export default function QuizzesPage() {
   const [searchQuery, setSearchQuery] = useState("")
 
-  // Fetch quizzes with submission counts using a join
-  const { data: quizzes, loading, error } = useDataFetching<'quizzes'>({
+  // Fetch quizzes with submissions using joins
+  const { data: quizzes, loading, error } = useDataFetching<'quizzes', [], [], [
+    {
+      table: 'submissions',
+      on: 'quiz_id'
+    }
+  ]>({
     table: 'quizzes',
-    select: `
-      *,
-      submissions(count)
-    `,
     orderBy: { column: 'created_at', ascending: false }
   });
 
   // Filter quizzes based on search query
-  const filteredQuizzes = (quizzes || []).filter(quiz => 
-    quiz.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (quiz.description?.toLowerCase() || '').includes(searchQuery.toLowerCase())
-  );
+  const filteredQuizzes = Array.isArray(quizzes) 
+    ? quizzes.filter((quiz: QuizWithSubmissions) => 
+        quiz.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (quiz.description?.toLowerCase() || '').includes(searchQuery.toLowerCase())
+      )
+    : [];
 
   // Helper function to get submission count
   const getSubmissionCount = (quiz: QuizWithSubmissions) => {
-    return quiz.submissions?.[0]?.count || 0;
+    return quiz.submissions?.length || 0;
   };
 
   return (
@@ -71,7 +79,7 @@ export default function QuizzesPage() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredQuizzes.map((quiz) => (
+          {filteredQuizzes.map((quiz: QuizWithSubmissions) => (
             <Card key={quiz.id}>
               <CardHeader>
                 <CardTitle>{quiz.title}</CardTitle>
@@ -85,7 +93,7 @@ export default function QuizzesPage() {
                 </p>
                 <div className="flex justify-between items-center">
                   <div className="text-sm text-muted-foreground">
-                    {getSubmissionCount(quiz as QuizWithSubmissions)} submissions
+                    {getSubmissionCount(quiz)} submissions
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" asChild>
