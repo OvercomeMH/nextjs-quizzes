@@ -1,41 +1,35 @@
-"use client";
+"use client"
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "./AuthProvider";
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from './AuthProvider'
 
-export default function ProtectedRoute({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { user, isLoading } = useAuth();
-  const router = useRouter();
+// This component wraps any page that requires authentication
+export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth()
+  const router = useRouter()
 
   useEffect(() => {
-    // If auth state is loaded and there's no user, redirect to login
+    // If we're not loading and there's no user, redirect to login
     if (!isLoading && !user) {
-      router.push("/login");
+      router.push('/login')
     }
-  }, [isLoading, user, router]);
+  }, [user, isLoading, router])
 
   // Show nothing while loading
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-t-blue-500 border-blue-200 rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-lg">Loading...</p>
-        </div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       </div>
-    );
+    )
   }
 
-  // If user is not authenticated, show nothing (will redirect)
-  if (!user) {
-    return null;
+  // If we have a user, show the protected content
+  if (user) {
+    return <>{children}</>
   }
 
-  // If user is authenticated, show the protected content
-  return <>{children}</>;
+  // Otherwise show nothing while redirecting
+  return null
 } 

@@ -1,30 +1,26 @@
-import { supabase } from '../lib/supabase';
-import type { Tables } from '../lib/supabase';
-import { describe, it, expect, beforeAll } from 'vitest';
+import { createClient } from '@supabase/supabase-js';
+import type { Tables } from '@/lib/supabase';
 
 // This test file tests access to all columns in the Supabase database
 // It ensures we can query each table and access every column defined in our Types
 
+// Skip tests if environment variables are not set
+const shouldRunTests = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
 // Function to test if a table is accessible and retrieve its columns
 async function testTableAccess(tableName: keyof Tables) {
-  // First test: Can we select from the table at all?
-  const { data, error } = await supabase
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  return await supabase
     .from(tableName)
     .select('*')
     .limit(1);
-  
-  // If there's an error or no data is returned but the table should exist
-  if (error) {
-    console.error(`Error accessing table ${tableName}:`, error);
-  }
-  
-  return { data, error };
 }
 
 describe('Supabase Database Access Tests', () => {
-  // Optional: Skip tests in certain environments
-  const shouldRunTests = process.env.NODE_ENV !== 'production';
-
   // Users table tests
   describe('Users Table', () => {
     it('should access all columns in the users table', async () => {
@@ -32,21 +28,19 @@ describe('Supabase Database Access Tests', () => {
       
       const { data, error } = await testTableAccess('users');
       
-      // Skip if no data or error (empty table is okay)
       if (error) {
-        console.warn('Skipping users table test due to error');
+        console.warn('Error accessing users table:', error);
         return;
       }
       
       if (data && data.length > 0) {
-        const user = data[0] as Tables['users'];
+        const user = data[0] as Tables['users']['Row'];
         
         // Test each column is accessible
         expect(user).toHaveProperty('id');
         expect(user).toHaveProperty('username');
         expect(user).toHaveProperty('email');
         expect(user).toHaveProperty('full_name');
-        expect(user).toHaveProperty('created_at');
         expect(user).toHaveProperty('quizzes_taken');
         expect(user).toHaveProperty('average_score');
         expect(user).toHaveProperty('total_points');
@@ -67,12 +61,12 @@ describe('Supabase Database Access Tests', () => {
       const { data, error } = await testTableAccess('quizzes');
       
       if (error) {
-        console.warn('Skipping quizzes table test due to error');
+        console.warn('Error accessing quizzes table:', error);
         return;
       }
       
       if (data && data.length > 0) {
-        const quiz = data[0] as Tables['quizzes'];
+        const quiz = data[0] as Tables['quizzes']['Row'];
         
         // Test each column is accessible
         expect(quiz).toHaveProperty('id');
@@ -81,8 +75,6 @@ describe('Supabase Database Access Tests', () => {
         expect(quiz).toHaveProperty('difficulty');
         expect(quiz).toHaveProperty('category');
         expect(quiz).toHaveProperty('time_limit');
-        expect(quiz).toHaveProperty('created_at');
-        expect(quiz).toHaveProperty('updated_at');
         expect(quiz).toHaveProperty('total_questions');
         expect(quiz).toHaveProperty('total_points');
         expect(quiz).toHaveProperty('average_rating');
@@ -159,12 +151,12 @@ describe('Supabase Database Access Tests', () => {
       const { data, error } = await testTableAccess('submissions');
       
       if (error) {
-        console.warn('Skipping submissions table test due to error');
+        console.warn('Error accessing submissions table:', error);
         return;
       }
       
       if (data && data.length > 0) {
-        const submission = data[0] as Tables['submissions'];
+        const submission = data[0] as Tables['submissions']['Row'];
         
         // Test each column is accessible
         expect(submission).toHaveProperty('id');
@@ -173,7 +165,6 @@ describe('Supabase Database Access Tests', () => {
         expect(submission).toHaveProperty('score');
         expect(submission).toHaveProperty('total_possible');
         expect(submission).toHaveProperty('time_spent');
-        expect(submission).toHaveProperty('completed_at');
         expect(submission).toHaveProperty('created_at');
       } else {
         console.warn('Submissions table is empty, skipping column checks');

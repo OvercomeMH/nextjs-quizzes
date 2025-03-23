@@ -13,6 +13,7 @@ import { AlertCircle, Clock } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { QuizWithQuestionsAndMetadata } from "@/types/database"
+import ProtectedRoute from "@/components/auth/ProtectedRoute"
 
 interface PageParams {
   id: string;
@@ -195,104 +196,106 @@ export default function QuizPage({ params }: { params: Promise<PageParams> }) {
   const progress = ((currentQuestion + 1) / quiz.questions.length) * 100;
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b bg-background">
-        <div className="container flex h-16 items-center justify-between py-4">
-          <div className="flex items-center gap-2">
-            <Link href="/" className="font-bold">
-              QuizMaster
-            </Link>
-          </div>
-          <div className="flex items-center gap-4">
+    <ProtectedRoute>
+      <div className="flex min-h-screen flex-col">
+        <header className="sticky top-0 z-10 border-b bg-background">
+          <div className="container flex h-16 items-center justify-between py-4">
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              <span className={`font-medium ${timeLeft < 60 ? "text-red-500" : ""}`}>{formatTime(timeLeft)}</span>
+              <Link href="/" className="font-bold">
+                QuizMaster
+              </Link>
             </div>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/dashboard">Exit Quiz</Link>
-            </Button>
-          </div>
-        </div>
-      </header>
-      <main className="flex-1 container py-6">
-        <div className="max-w-3xl mx-auto">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold">{quiz.title}</h1>
-            <div className="flex items-center justify-between mt-2">
-              <div className="text-sm text-muted-foreground">
-                Question {currentQuestion + 1} of {quiz.questions.length}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                <span className={`font-medium ${timeLeft < 60 ? "text-red-500" : ""}`}>{formatTime(timeLeft)}</span>
               </div>
-              <div className="text-sm font-medium">{Math.round(progress)}% Complete</div>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/dashboard">Exit Quiz</Link>
+              </Button>
             </div>
-            <Progress value={progress} className="mt-2" />
           </div>
+        </header>
+        <main className="flex-1 container py-6">
+          <div className="max-w-3xl mx-auto">
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold">{quiz.title}</h1>
+              <div className="flex items-center justify-between mt-2">
+                <div className="text-sm text-muted-foreground">
+                  Question {currentQuestion + 1} of {quiz.questions.length}
+                </div>
+                <div className="text-sm font-medium">{Math.round(progress)}% Complete</div>
+              </div>
+              <Progress value={progress} className="mt-2" />
+            </div>
 
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Question {currentQuestion + 1}</CardTitle>
-              <CardDescription>{question.text}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <RadioGroup value={answers[currentQuestion]} onValueChange={handleAnswerChange} className="space-y-3">
-                {question.options.map((option) => (
-                  <div key={option.id} className="flex items-center space-x-2 rounded-md border p-3 hover:bg-muted">
-                    <RadioGroupItem value={option.id} id={`option-${option.id}`} />
-                    <Label htmlFor={`option-${option.id}`} className="flex-1 cursor-pointer">
-                      {option.text}
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            </CardContent>
-            <CardFooter className="flex justify-between">
-              <Button variant="outline" onClick={handlePrevious} disabled={currentQuestion === 0}>
-                Previous
-              </Button>
-              {currentQuestion < quiz.questions.length - 1 ? (
-                <Button onClick={handleNext} disabled={!answers[currentQuestion]}>
-                  Next
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Question {currentQuestion + 1}</CardTitle>
+                <CardDescription>{question.text}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup value={answers[currentQuestion]} onValueChange={handleAnswerChange} className="space-y-3">
+                  {question.options.map((option) => (
+                    <div key={option.id} className="flex items-center space-x-2 rounded-md border p-3 hover:bg-muted">
+                      <RadioGroupItem value={option.id} id={`option-${option.id}`} />
+                      <Label htmlFor={`option-${option.id}`} className="flex-1 cursor-pointer">
+                        {option.text}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </CardContent>
+              <CardFooter className="flex justify-between">
+                <Button variant="outline" onClick={handlePrevious} disabled={currentQuestion === 0}>
+                  Previous
                 </Button>
-              ) : (
-                <Button onClick={handleSubmit} disabled={answers.some((answer) => answer === null) || isSubmitting}>
-                  {isSubmitting ? "Submitting..." : "Submit Quiz"}
+                {currentQuestion < quiz.questions.length - 1 ? (
+                  <Button onClick={handleNext} disabled={!answers[currentQuestion]}>
+                    Next
+                  </Button>
+                ) : (
+                  <Button onClick={handleSubmit} disabled={answers.some((answer) => answer === null) || isSubmitting}>
+                    {isSubmitting ? "Submitting..." : "Submit Quiz"}
+                  </Button>
+                )}
+              </CardFooter>
+            </Card>
+
+            {submitError && (
+              <Alert className="mb-6 border-red-200 text-red-800">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{submitError}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="grid grid-cols-5 gap-2">
+              {quiz.questions.map((_, index) => (
+                <Button
+                  key={index}
+                  variant={index === currentQuestion ? "default" : answers[index] ? "outline" : "ghost"}
+                  className="h-10 w-10"
+                  onClick={() => setCurrentQuestion(index)}
+                >
+                  {index + 1}
                 </Button>
-              )}
-            </CardFooter>
-          </Card>
+              ))}
+            </div>
 
-          {submitError && (
-            <Alert className="mb-6 border-red-200 text-red-800">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{submitError}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="grid grid-cols-5 gap-2">
-            {quiz.questions.map((_, index) => (
-              <Button
-                key={index}
-                variant={index === currentQuestion ? "default" : answers[index] ? "outline" : "ghost"}
-                className="h-10 w-10"
-                onClick={() => setCurrentQuestion(index)}
-              >
-                {index + 1}
-              </Button>
-            ))}
+            {answers.some((answer) => answer === null) && (
+              <Alert className="mt-6">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Incomplete Quiz</AlertTitle>
+                <AlertDescription>
+                  You have {answers.filter((answer) => answer === null).length} unanswered questions.
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
-
-          {answers.some((answer) => answer === null) && (
-            <Alert className="mt-6">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Incomplete Quiz</AlertTitle>
-              <AlertDescription>
-                You have {answers.filter((answer) => answer === null).length} unanswered questions.
-              </AlertDescription>
-            </Alert>
-          )}
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </ProtectedRoute>
   )
 }
 

@@ -1,13 +1,36 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import 'server-only';
 
 export async function POST(request: Request) {
   try {
+    // Initialize Supabase client with cookies
+    const cookieStore = cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+        },
+      }
+    );
+
+    // Check if user is authenticated
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    if (authError || !session) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     const data = await request.json();
     
     const { 
-      userId, 
       quizId, 
       score, 
       totalPossible, 
@@ -27,7 +50,7 @@ export async function POST(request: Request) {
     const { data: submission, error: submissionError } = await supabase
       .from('submissions')
       .insert({
-        user_id: userId || null, // Allow anonymous submissions
+        user_id: session.user.id, // Always use the authenticated user's ID
         quiz_id: quizId,
         score: score,
         total_possible: totalPossible,
@@ -108,42 +131,40 @@ export async function POST(request: Request) {
       console.error('Error updating quiz play count:', err);
     }
     
-    // 4. If we have a user ID, update their stats
-    if (userId) {
-      try {
-        // Get current user stats
-        const { data: userData, error: userFetchError } = await supabase
-          .from('users')
-          .select('quizzes_taken, total_points')
-          .eq('id', userId)
-          .single();
+    // 4. Update user stats
+    try {
+      // Get current user stats
+      const { data: userData, error: userFetchError } = await supabase
+        .from('users')
+        .select('quizzes_taken, total_points')
+        .eq('id', session.user.id)
+        .single();
+      
+      if (userFetchError) {
+        console.error('Error fetching user data:', userFetchError);
+      } else {
+        // Update user stats with incremented values
+        const newQuizzesTaken = (userData.quizzes_taken || 0) + 1;
+        const newTotalPoints = (userData.total_points || 0) + score;
         
-        if (userFetchError) {
-          console.error('Error fetching user data:', userFetchError);
-        } else {
-          // Update user stats with incremented values
-          const newQuizzesTaken = (userData.quizzes_taken || 0) + 1;
-          const newTotalPoints = (userData.total_points || 0) + score;
+        // Calculate new average
+        const newAverage = newTotalPoints / newQuizzesTaken;
+        
+        const { error: userUpdateError } = await supabase
+          .from('users')
+          .update({ 
+            quizzes_taken: newQuizzesTaken,
+            total_points: newTotalPoints,
+            average_score: newAverage
+          })
+          .eq('id', session.user.id);
           
-          // Calculate new average
-          const newAverage = newTotalPoints / newQuizzesTaken;
-          
-          const { error: userUpdateError } = await supabase
-            .from('users')
-            .update({ 
-              quizzes_taken: newQuizzesTaken,
-              total_points: newTotalPoints,
-              average_score: newAverage
-            })
-            .eq('id', userId);
-            
-          if (userUpdateError) {
-            console.error('Error updating user stats:', userUpdateError);
-          }
+        if (userUpdateError) {
+          console.error('Error updating user stats:', userUpdateError);
         }
-      } catch (err) {
-        console.error('Error updating user stats:', err);
       }
+    } catch (err) {
+      console.error('Error updating user stats:', err);
     }
     
     return NextResponse.json({
