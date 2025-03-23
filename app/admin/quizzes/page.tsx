@@ -2,203 +2,105 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
-import { useAuth } from "@/components/auth/AuthProvider"
-import ProtectedRoute from "@/components/auth/ProtectedRoute"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { PlusCircle, Pencil, BarChart3, Trash } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Quiz } from "@/types/database"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { useDataFetching } from "@/hooks/useDataFetching"
+import { AdminLayout } from "@/components/layouts/AdminLayout"
 import type { TableRow } from "@/lib/supabase"
 
-// Define type for quiz with submission count
-type QuizWithSubmissions = TableRow<'quizzes'> & {
+interface QuizWithSubmissions extends TableRow<'quizzes'> {
   submissions: { count: number }[];
-};
+}
 
-export default function AdminQuizzesPage() {
-  const { user } = useAuth();
-  const { data: quizzes, loading, error: fetchError, mutate } = useDataFetching<'quizzes'>({
+export default function QuizzesPage() {
+  const [searchQuery, setSearchQuery] = useState("")
+
+  // Fetch quizzes with submission counts using a join
+  const { data: quizzes, loading, error } = useDataFetching<'quizzes'>({
     table: 'quizzes',
     select: `
       *,
-      submissions:submissions(count)
+      submissions(count)
     `,
     orderBy: { column: 'created_at', ascending: false }
   });
 
-  // Cast quizzes to include submission count
-  const typedQuizzes = (quizzes || []) as QuizWithSubmissions[];
+  // Filter quizzes based on search query
+  const filteredQuizzes = (quizzes || []).filter(quiz => 
+    quiz.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (quiz.description?.toLowerCase() || '').includes(searchQuery.toLowerCase())
+  );
 
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleDeleteQuiz = async (id: string) => {
-    try {
-      setDeleteId(id);
-      setError(null);
-      
-      // First delete all questions associated with this quiz
-      const { error: questionsError } = await supabase
-        .from('questions')
-        .delete()
-        .eq('quiz_id', id);
-      
-      if (questionsError) throw questionsError;
-      
-      // Then delete the quiz
-      const { error: quizError } = await supabase
-        .from('quizzes')
-        .delete()
-        .eq('id', id);
-      
-      if (quizError) throw quizError;
-      
-      // Update the UI using SWR's mutate
-      await mutate();
-    } catch (err: any) {
-      console.error('Error deleting quiz:', err);
-      setError(`Failed to delete quiz: ${err.message}`);
-    } finally {
-      setDeleteId(null);
-    }
-  };
-
-  // Function to format date string
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
+  // Helper function to get submission count
+  const getSubmissionCount = (quiz: QuizWithSubmissions) => {
+    return quiz.submissions?.[0]?.count || 0;
   };
 
   return (
-    <ProtectedRoute>
-      <div className="flex min-h-screen flex-col">
-        <header className="sticky top-0 z-10 border-b bg-background">
-          <div className="container flex h-16 items-center justify-between py-4">
-            <div className="flex items-center gap-2">
-              <Link href="/admin/dashboard" className="font-bold">
-                QuizMaster <Badge>Admin</Badge>
-              </Link>
-            </div>
-            <nav className="hidden md:flex gap-6">
-              <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/dashboard">
-                Dashboard
-              </Link>
-              <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/quizzes">
-                Quizzes
-              </Link>
-              <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/users">
-                Users
-              </Link>
-              <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/activity">
-                Activity
-              </Link>
-              <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/analytics">
-                Analytics
-              </Link>
-            </nav>
-            <div className="flex items-center gap-2">
-              <Button size="sm" asChild className="gap-1">
-                <Link href="/admin/quizzes/create">
-                  <PlusCircle className="h-4 w-4" /> New Quiz
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </header>
-        <main className="flex-1 container py-6">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold">Manage Quizzes</h1>
-            <p className="text-muted-foreground">Create, edit, and analyze quizzes.</p>
-          </div>
-
-          {(error || fetchError) && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error || fetchError}</AlertDescription>
-            </Alert>
-          )}
-
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
-            </div>
-          ) : typedQuizzes.length === 0 ? (
-            <div className="text-center py-12 border rounded-lg">
-              <h3 className="text-lg font-medium mb-2">No quizzes yet</h3>
-              <p className="text-muted-foreground mb-4">Get started by creating your first quiz.</p>
-              <Button asChild>
-                <Link href="/admin/quizzes/create">Create Quiz</Link>
-              </Button>
-            </div>
-          ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {typedQuizzes.map((quiz) => (
-                <Card key={quiz.id}>
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="line-clamp-1">{quiz.title}</CardTitle>
-                        <div className="flex gap-2 mt-1">
-                          <Badge variant="outline" className="capitalize">
-                            {quiz.difficulty}
-                          </Badge>
-                          {quiz.category && (
-                            <Badge variant="outline" className="capitalize">
-                              {quiz.category}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground line-clamp-2 mb-4">{quiz.description}</p>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Questions:</span> {quiz.total_questions}
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Times Played:</span> {quiz.submissions?.[0]?.count || 0}
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-muted-foreground">Created:</span> {formatDate(quiz.created_at)}
-                      </div>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex justify-between">
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" asChild className="gap-1">
-                        <Link href={`/admin/quizzes/${quiz.id}/edit`}>
-                          <Pencil className="h-3.5 w-3.5" /> Edit
-                        </Link>
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="gap-1 text-red-500 hover:text-red-700"
-                        onClick={() => handleDeleteQuiz(quiz.id)}
-                        disabled={deleteId === quiz.id}
-                      >
-                        <Trash className="h-3.5 w-3.5" /> 
-                        {deleteId === quiz.id ? 'Deleting...' : 'Delete'}
-                      </Button>
-                    </div>
-                    <Button variant="ghost" size="sm" asChild className="gap-1">
-                      <Link href={`/admin/quizzes/${quiz.id}/analytics`}>
-                        <BarChart3 className="h-3.5 w-3.5" /> Analytics
-                      </Link>
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
-          )}
-        </main>
+    <AdminLayout>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">Quizzes</h1>
+        <p className="text-muted-foreground">Manage and view all quizzes</p>
       </div>
-    </ProtectedRoute>
+
+      <div className="mb-6 flex justify-between items-center">
+        <div className="flex-1 max-w-sm">
+          <Input
+            placeholder="Search quizzes..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <Button asChild>
+          <Link href="/admin/quizzes/new">Create New Quiz</Link>
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
+        </div>
+      ) : error ? (
+        <div className="flex items-center justify-center h-64">
+          <p className="text-red-500">Error loading quizzes: {error}</p>
+        </div>
+      ) : filteredQuizzes.length === 0 ? (
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">No quizzes found</p>
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredQuizzes.map((quiz) => (
+            <Card key={quiz.id}>
+              <CardHeader>
+                <CardTitle>{quiz.title}</CardTitle>
+                <CardDescription>
+                  Created on {quiz.created_at ? new Date(quiz.created_at).toLocaleDateString() : 'Unknown date'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {quiz.description || "No description provided"}
+                </p>
+                <div className="flex justify-between items-center">
+                  <div className="text-sm text-muted-foreground">
+                    {getSubmissionCount(quiz as QuizWithSubmissions)} submissions
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/admin/quizzes/${quiz.id}/edit`}>Edit</Link>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/admin/quizzes/${quiz.id}/analytics`}>Analytics</Link>
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </AdminLayout>
   )
 } 

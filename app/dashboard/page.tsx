@@ -110,11 +110,11 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Average Score</p>
-                    <p className="font-medium">
+                    <div className="text-2xl font-bold">
                       {profile?.quizzes_taken && profile?.total_points
-                        ? ((profile.total_points / (profile.quizzes_taken * 100)) * 100).toFixed(1) + '%'
-                        : '0%'}
-                    </p>
+                        ? `${((profile.total_points / (profile.quizzes_taken * 100)) * 100).toFixed(1)}%`
+                        : 'N/A'}
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -133,9 +133,9 @@ export default function DashboardPage() {
                       <div key={submission.id} className="flex items-center justify-between">
                         <div>
                           <p className="font-medium">{submission.quizzes?.title}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Score: {submission.score}/{submission.total_possible}
-                          </p>
+                          <div className="text-sm text-muted-foreground">
+                            Score: {submission.score}/{submission.total_possible} ({Math.round((submission.score / submission.total_possible) * 100)}%)
+                          </div>
                         </div>
                         <Badge variant="outline">
                           {new Date(submission.created_at || '').toLocaleDateString()}

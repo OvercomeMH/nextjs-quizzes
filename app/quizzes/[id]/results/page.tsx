@@ -109,13 +109,12 @@ export default function QuizResultsPage({ params }: { params: Promise<PageParams
               <CardDescription>{quiz.title}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="text-center">
-                <div className="text-5xl font-bold mb-2">
-                  {score}/{total}
-                </div>
-                <div className="text-xl">{percentage}%</div>
-                <Progress value={percentage} className="mt-2" />
-                <p className="mt-4 text-muted-foreground">{getResultMessage(percentage)}</p>
+              <div className="text-center space-y-4">
+                <h1 className="text-4xl font-bold">Quiz Complete!</h1>
+                <div className="text-6xl font-bold text-primary">{percentage}%</div>
+                <p className="text-muted-foreground">
+                  You scored {score}/{total} points ({percentage}%)
+                </p>
               </div>
             </CardContent>
             <CardFooter className="flex justify-center gap-4">

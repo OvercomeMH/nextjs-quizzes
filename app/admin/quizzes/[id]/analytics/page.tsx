@@ -28,6 +28,7 @@ import {
 import { Quiz, Submission, User } from "@/types/database"
 import { useDataFetching } from "@/hooks/useDataFetching"
 import type { TableRow } from "@/lib/supabase"
+import { AdminLayout } from "@/components/layouts/AdminLayout"
 
 // Define types for analytics data
 interface QuestionStat {
@@ -203,21 +204,12 @@ export default function QuizAnalyticsPage({ params }: { params: Promise<{ id: st
   }, [quizData, submissions, users]);
 
   const loading = loadingQuiz || loadingSubmissions || loadingUsers;
-
-  if (loading || !analytics) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
   const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
   
-  // Memoize chart data
-  const scoreDistributionData = useMemo(() => analytics?.scoreDistribution || [], [analytics?.scoreDistribution]);
-  const submissionsOverTimeData = useMemo(() => analytics?.submissionsOverTime || [], [analytics?.submissionsOverTime]);
-  const questionStatsData = useMemo(() => analytics?.questionStats || [], [analytics?.questionStats]);
+  // Memoize chart data - always return empty arrays if analytics is null
+  const scoreDistributionData = useMemo(() => analytics?.scoreDistribution || [], [analytics]);
+  const submissionsOverTimeData = useMemo(() => analytics?.submissionsOverTime || [], [analytics]);
+  const questionStatsData = useMemo(() => analytics?.questionStats || [], [analytics]);
 
   // Memoize chart components
   const ScoreDistributionChart = useMemo(() => (
@@ -244,24 +236,6 @@ export default function QuizAnalyticsPage({ params }: { params: Promise<{ id: st
       </LineChart>
     </ResponsiveContainer>
   ), [submissionsOverTimeData]);
-
-  const QuestionPerformanceChart = useMemo(() => (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart
-        data={questionStatsData}
-        layout="vertical"
-        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-      >
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis type="number" />
-        <YAxis dataKey="question" type="category" />
-        <Tooltip />
-        <Legend />
-        <Bar dataKey="correct" stackId="a" fill="#4ade80" />
-        <Bar dataKey="incorrect" stackId="a" fill="#f87171" />
-      </BarChart>
-    </ResponsiveContainer>
-  ), [questionStatsData]);
 
   // Memoize question stat cards
   const QuestionStatCards = useMemo(() => (
@@ -326,203 +300,99 @@ export default function QuizAnalyticsPage({ params }: { params: Promise<{ id: st
     return Math.max(40, Math.min(100, 40 + percentage * 0.6));
   };
 
+  // Now we can safely return the loading state
+  if (loading || !analytics) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b bg-background">
-        <div className="container flex h-16 items-center justify-between py-4">
-          <div className="flex items-center gap-2">
-            <Link href="/admin/dashboard" className="font-bold">
-              QuizMaster <Badge>Admin</Badge>
-            </Link>
+    <AdminLayout>
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Quiz Analytics</h1>
+            <p className="text-muted-foreground">Detailed analytics for {analytics.quiz.title}</p>
           </div>
-          <nav className="hidden md:flex gap-6">
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/dashboard">
-              Dashboard
+          <Button variant="outline" asChild>
+            <Link href="/admin/quizzes">
+              Back to Quizzes
             </Link>
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/quizzes">
-              Manage Quizzes
-            </Link>
-          </nav>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/admin/quizzes">Back to Quizzes</Link>
-            </Button>
-          </div>
+          </Button>
         </div>
-      </header>
-      <main className="flex-1 container py-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold">{analytics.quiz.title} - Analytics</h1>
-            <p className="text-muted-foreground">Detailed analytics and insights for this quiz.</p>
-          </div>
 
-          <div className="grid gap-4 md:grid-cols-2 mb-6">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Total Submissions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analytics.totalSubmissions}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Average Score</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analytics.averageScore.toFixed(1)}%</div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Tabs defaultValue="overview" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="questions">Question Analysis</TabsTrigger>
-              <TabsTrigger value="submissions">Submissions</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="overview" className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Score Distribution</CardTitle>
-                    <CardDescription>Distribution of scores across all submissions</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[300px]">
-                      {ScoreDistributionChart}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Completion Time Distribution</CardTitle>
-                    <CardDescription>Time taken by users to complete the quiz</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        {analytics.completionTimeScatter && analytics.completionTimeScatter.length > 0 ? (
-                          <ScatterChart
-                            margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-                          >
-                            <CartesianGrid />
-                            <XAxis 
-                              type="number" 
-                              dataKey="time" 
-                              name="Time (minutes)" 
-                              domain={[0, 60]}
-                              label={{ value: 'Minutes', position: 'insideBottomRight', offset: -5 }}
-                            />
-                            <YAxis 
-                              type="number" 
-                              dataKey="percentage" 
-                              name="Score (%)" 
-                              domain={[0, 100]}
-                              label={{ value: 'Score %', angle: -90, position: 'insideLeft' }}
-                            />
-                            <ZAxis 
-                              type="number" 
-                              range={[40, 100]} 
-                              domain={[0, 100]}
-                            />
-                            <Tooltip 
-                              cursor={{ strokeDasharray: '3 3' }}
-                              formatter={(value, name) => {
-                                if (name === 'Time (minutes)') return [`${value} min`, name];
-                                return [`${value}%`, 'Score'];
-                              }}
-                            />
-                            <Legend />
-                            <Scatter 
-                              name="Quiz Submissions" 
-                              data={analytics.completionTimeScatter.map(point => ({
-                                ...point,
-                                percentage: Math.round((point.score / point.maxScore) * 100),
-                                z: getMarkerSize(point.score, point.maxScore)
-                              }))} 
-                              fill="#8884d8"
-                            />
-                          </ScatterChart>
-                        ) : (
-                          <div className="flex h-full items-center justify-center">
-                            <p className="text-muted-foreground">No completion time data available</p>
-                          </div>
-                        )}
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Submissions Over Time</CardTitle>
-                  <CardDescription>Number of quiz submissions over the past week</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[300px]">
-                    {SubmissionsOverTimeChart}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="questions" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Question Performance</CardTitle>
-                  <CardDescription>Correct vs. incorrect answers for each question</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[400px]">
-                    {QuestionPerformanceChart}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {QuestionStatCards}
-            </TabsContent>
-
-            <TabsContent value="submissions" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Submissions</CardTitle>
-                  <CardDescription>Latest attempts on this quiz</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {analytics.recentSubmissions.map((submission) => (
-                      <div key={submission.id} className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{submission.user}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Score: {submission.score} ({submission.percentage.toFixed(1)}%)
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Time: {submission.time}
-                          </p>
-                        </div>
-                        <Badge variant="outline">
-                          {submission.date}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="flex justify-end">
-                <Button variant="outline">Export All Submissions</Button>
-              </div>
-            </TabsContent>
-          </Tabs>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Submissions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{analytics.totalSubmissions}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Average Score</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{analytics.averageScore.toFixed(1)}%</div>
+            </CardContent>
+          </Card>
         </div>
-      </main>
-    </div>
-  )
+
+        <div className="grid gap-4 md:grid-cols-2 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Score Distribution</CardTitle>
+              <CardDescription>Distribution of scores across all submissions (percentage)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                {ScoreDistributionChart}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Submissions Over Time</CardTitle>
+              <CardDescription>Number of submissions per day</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                {SubmissionsOverTimeChart}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Recent Submissions</CardTitle>
+            <CardDescription>Latest quiz attempts with scores and completion times</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {analytics.recentSubmissions.map((submission) => (
+                <div key={submission.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                  <div>
+                    <p className="font-medium">{submission.user}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {submission.percentage.toFixed(1)}% ({submission.score}) • {submission.time} • {submission.date}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </AdminLayout>
+  );
 }
 

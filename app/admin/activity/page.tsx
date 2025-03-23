@@ -15,6 +15,7 @@ import { CalendarIcon } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { User, Quiz, Submission } from "@/types/database"
 import { useDataFetching } from "@/hooks/useDataFetching"
+import { AdminLayout } from "@/components/layouts/AdminLayout"
 
 // Define activity types
 type ActivityType = 'submission' | 'registration' | 'quiz_creation';
@@ -48,11 +49,12 @@ export default function ActivityPage() {
   const [activityType, setActivityType] = useState<ActivityType | 'all'>("all")
   const [startDate, setStartDate] = useState<Date | undefined>(undefined)
   const [endDate, setEndDate] = useState<Date | undefined>(undefined)
+  const [error, setError] = useState<string | null>(null)
 
   // Fetch activities using our hook
   const { data: submissions, loading: loadingSubmissions } = useDataFetching<'submissions'>({
     table: 'submissions',
-    select: 'id, user_id, quiz_id, created_at, score',
+    select: 'id, user_id, quiz_id, created_at, score, total_possible',
     orderBy: { column: 'created_at', ascending: false }
   });
 
@@ -81,10 +83,10 @@ export default function ActivityPage() {
         id: submission.id,
         type: 'submission',
         title: `Quiz Submission: ${quiz?.title || 'Unknown Quiz'}`,
-        details: `${user?.full_name || 'Unknown User'} scored ${submission.score}%`,
-        timestamp: submission.created_at,
-        user_id: submission.user_id,
-        quiz_id: submission.quiz_id
+        details: `${user?.full_name || 'Unknown User'} scored ${Math.round((submission.score / submission.total_possible) * 100)}%`,
+        timestamp: submission.created_at || new Date().toISOString(),
+        user_id: submission.user_id || undefined,
+        quiz_id: submission.quiz_id || undefined
       });
     });
 
@@ -95,7 +97,7 @@ export default function ActivityPage() {
         type: 'registration',
         title: 'User Registration',
         details: `${user.full_name || 'Unknown User'} joined the platform`,
-        timestamp: user.created_at,
+        timestamp: user.created_at || new Date().toISOString(),
         user_id: user.id
       });
     });
@@ -107,7 +109,7 @@ export default function ActivityPage() {
         type: 'quiz_creation',
         title: 'Quiz Created',
         details: `New quiz "${quiz.title}" was created`,
-        timestamp: quiz.created_at,
+        timestamp: quiz.created_at || new Date().toISOString(),
         quiz_id: quiz.id
       });
     });
@@ -139,21 +141,20 @@ export default function ActivityPage() {
     });
   }, [activities, activityType, startDate, endDate]);
 
-  // Calculate pagination
-  useEffect(() => {
+  // Calculate pagination and get paginated activities in a single memo
+  const { paginatedActivities, paginationData } = useMemo(() => {
     const total = filteredActivities.length;
     const totalPages = Math.ceil(total / pagination.limit);
-    setPagination(prev => ({
-      ...prev,
-      total,
-      totalPages
-    }));
-  }, [filteredActivities, pagination.limit]);
-
-  // Get paginated activities
-  const paginatedActivities = useMemo(() => {
     const start = (pagination.page - 1) * pagination.limit;
-    return filteredActivities.slice(start, start + pagination.limit);
+    
+    return {
+      paginatedActivities: filteredActivities.slice(start, start + pagination.limit),
+      paginationData: {
+        ...pagination,
+        total,
+        totalPages
+      }
+    };
   }, [filteredActivities, pagination.page, pagination.limit]);
 
   const loading = loadingSubmissions || loadingUsers || loadingQuizzes;
@@ -187,181 +188,143 @@ export default function ActivityPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b bg-background">
-        <div className="container flex h-16 items-center justify-between py-4">
-          <div className="flex items-center gap-2">
-            <Link href="/" className="font-bold">
-              QuizMaster <Badge>Admin</Badge>
-            </Link>
-          </div>
-          <nav className="hidden md:flex gap-6">
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/dashboard">
-              Dashboard
-            </Link>
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/quizzes">
-              Quizzes
-            </Link>
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/users">
-              Users
-            </Link>
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/activity">
-              Activity
-            </Link>
-            <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/analytics">
-              Analytics
-            </Link>
-          </nav>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/">Logout</Link>
-            </Button>
-          </div>
+    <AdminLayout>
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold">Activity Log</h1>
+          <p className="text-muted-foreground">View all user and system activities</p>
         </div>
-      </header>
-      <main className="flex-1 container py-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold">Activity Log</h1>
-            <p className="text-muted-foreground">View all user and system activities</p>
-          </div>
 
-          {/* Filters section */}
-          <div className="mb-6 space-y-4">
-            <h2 className="text-xl font-semibold">Filters</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-1 block">Activity Type</label>
-                <Select value={activityType} onValueChange={(value) => setActivityType(value as ActivityType | 'all')}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Activities" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Activities</SelectItem>
-                    <SelectItem value="submission">Quiz Submissions</SelectItem>
-                    <SelectItem value="registration">User Registrations</SelectItem>
-                    <SelectItem value="quiz_creation">Quiz Creations</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium mb-1 block">Start Date</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal"
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {startDate ? format(startDate, "PPP") : "Pick a start date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={startDate}
-                      onSelect={setStartDate}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium mb-1 block">End Date</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal"
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {endDate ? format(endDate, "PPP") : "Pick an end date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={endDate}
-                      onSelect={setEndDate}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
+        {/* Filters section */}
+        <div className="mb-6 space-y-4">
+          <h2 className="text-xl font-semibold">Filters</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Activity Type</label>
+              <Select value={activityType} onValueChange={(value) => setActivityType(value as ActivityType | 'all')}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Activities" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Activities</SelectItem>
+                  <SelectItem value="submission">Quiz Submissions</SelectItem>
+                  <SelectItem value="registration">User Registrations</SelectItem>
+                  <SelectItem value="quiz_creation">Quiz Creations</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             
-            <div className="flex gap-2">
-              <Button onClick={() => {
-                setActivityType("all")
-                setStartDate(undefined)
-                setEndDate(undefined)
-              }}>
-                Reset Filters
-              </Button>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Start Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {startDate ? format(startDate, "PPP") : "Pick a date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={startDate}
+                    onSelect={setStartDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1 block">End Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {endDate ? format(endDate, "PPP") : "Pick a date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={endDate}
+                    onSelect={setEndDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
-
-          {/* Activities list */}
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <p>Loading activities...</p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Activity list */}
-              <div className="space-y-4">
-                {paginatedActivities.map((activity) => (
-                  <Card key={activity.id}>
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold">{activity.title}</h3>
-                            <Badge variant={getBadgeVariant(activity.type)}>
-                              {getActivityTypeLabel(activity.type)}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">{activity.details}</p>
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {new Date(activity.timestamp).toLocaleString()}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              {/* Pagination */}
-              <div className="mt-6 flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">
-                  Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} activities
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
-                    disabled={pagination.page === 1}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPagination(prev => ({ ...prev, page: Math.min(pagination.totalPages, prev.page + 1) }))}
-                    disabled={pagination.page === pagination.totalPages}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
-      </main>
-    </div>
+
+        {loading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
+          </div>
+        ) : error ? (
+          <div className="flex justify-center items-center h-64">
+            <p className="text-red-500">{error}</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {paginatedActivities.length > 0 ? (
+              paginatedActivities.map((activity) => (
+                <Card key={activity.id}>
+                  <CardContent className="pt-6">
+                    <div className="flex items-start gap-4">
+                      <Badge variant={getBadgeVariant(activity.type)} className="mt-1">
+                        {getActivityTypeLabel(activity.type)}
+                      </Badge>
+                      <div className="flex-1">
+                        <h3 className="font-medium">{activity.title}</h3>
+                        <p className="text-sm text-muted-foreground">{activity.details}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(activity.timestamp).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Card>
+                <CardHeader className="text-center py-10">
+                  <CardTitle>No activities found</CardTitle>
+                  <CardDescription>
+                    {activityType !== 'all' || startDate || endDate
+                      ? "No activities match your filter criteria. Try adjusting your filters."
+                      : "There are no activities to display."}
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            )}
+
+            {/* Pagination */}
+            {paginationData.totalPages > 1 && (
+              <div className="flex justify-center gap-2 mt-6">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+                  disabled={paginationData.page === 1}
+                >
+                  Previous
+                </Button>
+                <span className="flex items-center px-4">
+                  Page {paginationData.page} of {paginationData.totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                  disabled={paginationData.page === paginationData.totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </AdminLayout>
   )
 } 

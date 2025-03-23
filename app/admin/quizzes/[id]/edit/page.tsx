@@ -20,6 +20,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import ProtectedRoute from "@/components/auth/ProtectedRoute"
 import { Quiz, Question, QuestionOption, QuizWithQuestions } from "@/types/database"
 import { useDataFetching } from "@/hooks/useDataFetching"
+import { AdminLayout } from "@/components/layouts/AdminLayout"
 
 // Types for our form
 interface QuizFormQuestion {
@@ -121,25 +122,31 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
-      </div>
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="w-12 h-12 border-4 border-t-primary border-primary/30 rounded-full animate-spin"></div>
+        </div>
+      </AdminLayout>
     );
   }
 
   if (fetchError) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center text-red-500">{fetchError}</div>
-      </div>
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center text-red-500">{fetchError}</div>
+        </div>
+      </AdminLayout>
     );
   }
 
   if (!quizData?.[0]) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">Quiz not found</div>
-      </div>
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">Quiz not found</div>
+        </div>
+      </AdminLayout>
     );
   }
 
@@ -329,254 +336,172 @@ export default function EditQuizPage({ params }: { params: Promise<PageParams> }
   const areQuestionsValid = questions.every((q) => q.text && q.options.every((o) => o.text) && q.correct_answer);
 
   return (
-    <ProtectedRoute>
-      <div className="flex min-h-screen flex-col">
-        <header className="sticky top-0 z-10 border-b bg-background">
-          <div className="container flex h-16 items-center justify-between py-4">
-            <div className="flex items-center gap-2">
-              <Link href="/admin/dashboard" className="font-bold">
-                QuizMaster <Badge>Admin</Badge>
-              </Link>
-            </div>
-            <nav className="hidden md:flex gap-6">
-              <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/dashboard">
-                Dashboard
-              </Link>
-              <Link className="text-sm font-medium hover:underline underline-offset-4" href="/admin/quizzes">
-                Manage Quizzes
-              </Link>
-            </nav>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/admin/quizzes">Cancel</Link>
-              </Button>
-            </div>
+    <AdminLayout>
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Edit Quiz</h1>
+            <p className="text-muted-foreground">Update quiz details and questions</p>
           </div>
-        </header>
-        <main className="flex-1 container py-6">
-          <div className="max-w-4xl mx-auto">
-            <div className="mb-6">
-              <Button variant="ghost" size="sm" className="mb-2" asChild>
-                <Link href="/admin/quizzes">
-                  <ArrowLeft className="h-4 w-4 mr-1" /> Back to Quizzes
-                </Link>
-              </Button>
-              <h1 className="text-3xl font-bold">Edit Quiz</h1>
-              <p className="text-muted-foreground">Update quiz details and questions.</p>
-            </div>
+          <Button variant="outline" asChild>
+            <Link href="/admin/quizzes">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Quizzes
+            </Link>
+          </Button>
+        </div>
 
-            {error && (
-              <Alert variant="destructive" className="mb-6">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-            {success && (
-              <Alert className="mb-6 bg-green-50 text-green-800 border-green-200">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Success</AlertTitle>
-                <AlertDescription>Quiz updated successfully! Redirecting...</AlertDescription>
-              </Alert>
-            )}
+        <Tabs value={currentTab} onValueChange={setCurrentTab} className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="details">Quiz Details</TabsTrigger>
+            <TabsTrigger value="questions">Questions</TabsTrigger>
+          </TabsList>
 
-            <Tabs value={currentTab} onValueChange={setCurrentTab} className="space-y-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="details">Quiz Details</TabsTrigger>
-                <TabsTrigger value="questions" disabled={!isDetailsValid}>
-                  Questions
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="details">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Quiz Information</CardTitle>
-                    <CardDescription>Update the basic information about your quiz.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="title">Quiz Title</Label>
-                      <Input
-                        id="title"
-                        placeholder="Enter quiz title"
-                        value={quizTitle}
-                        onChange={(e) => setQuizTitle(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Description</Label>
-                      <Textarea
-                        id="description"
-                        placeholder="Enter quiz description"
-                        value={quizDescription}
-                        onChange={(e) => setQuizDescription(e.target.value)}
-                        rows={3}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="category">Category</Label>
-                        <Select value={category} onValueChange={setCategory}>
-                          <SelectTrigger id="category">
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="programming">Programming</SelectItem>
-                            <SelectItem value="mathematics">Mathematics</SelectItem>
-                            <SelectItem value="science">Science</SelectItem>
-                            <SelectItem value="history">History</SelectItem>
-                            <SelectItem value="general">General Knowledge</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="difficulty">Difficulty</Label>
-                        <Select value={difficulty} onValueChange={setDifficulty}>
-                          <SelectTrigger id="difficulty">
-                            <SelectValue placeholder="Select difficulty" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="beginner">Beginner</SelectItem>
-                            <SelectItem value="intermediate">Intermediate</SelectItem>
-                            <SelectItem value="advanced">Advanced</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="time-limit">Time Limit (minutes)</Label>
-                      <Input
-                        id="time-limit"
-                        type="number"
-                        min="1"
-                        max="60"
-                        value={timeLimit}
-                        onChange={(e) => setTimeLimit(e.target.value)}
-                      />
-                    </div>
-                  </CardContent>
-                  <CardFooter>
-                    <Button onClick={() => setCurrentTab("questions")} disabled={!isDetailsValid}>
-                      Next: Edit Questions
-                    </Button>
-                  </CardFooter>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="questions">
-                <div className="space-y-4">
-                  {questions.map((question, questionIndex) => (
-                    <Card key={questionIndex}>
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                          <CardTitle>Question {questionIndex + 1}</CardTitle>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeQuestion(questionIndex)}
-                            disabled={questions.length === 1}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor={`question-${questionIndex}`}>Question Text</Label>
-                          <Textarea
-                            id={`question-${questionIndex}`}
-                            placeholder="Enter question text"
-                            value={question.text}
-                            onChange={(e) => updateQuestionText(questionIndex, e.target.value)}
-                            rows={2}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Options</Label>
-                          <div className="space-y-2">
-                            {question.options.map((option) => (
-                              <div key={option.id} className="flex items-center gap-2">
-                                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs">
-                                  {option.id}
-                                </div>
-                                <Input
-                                  placeholder={`Option ${option.id.toUpperCase()}`}
-                                  value={option.text}
-                                  onChange={(e) => updateOptionText(questionIndex, option.id, e.target.value)}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Correct Answer</Label>
-                          <RadioGroup
-                            value={question.correct_answer}
-                            onValueChange={(value) => updateCorrectAnswer(questionIndex, value)}
-                            className="flex space-x-2"
-                          >
-                            {question.options.map((option) => (
-                              <div key={option.id} className="flex items-center space-x-1">
-                                <RadioGroupItem value={option.id} id={`q${questionIndex}-${option.id}`} />
-                                <Label htmlFor={`q${questionIndex}-${option.id}`} className="cursor-pointer">
-                                  {option.id.toUpperCase()}
-                                </Label>
-                              </div>
-                            ))}
-                          </RadioGroup>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor={`points-${questionIndex}`}>Points</Label>
-                          <Input
-                            id={`points-${questionIndex}`}
-                            type="number"
-                            min="1"
-                            max="100"
-                            value={question.points.toString()}
-                            onChange={(e) => updateQuestionPoints(questionIndex, parseInt(e.target.value) || 10)}
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-
-                  <div className="flex justify-between">
-                    <Button variant="outline" onClick={addQuestion} className="flex items-center gap-1">
-                      <Plus className="h-4 w-4" /> Add Question
-                    </Button>
-
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => setCurrentTab("details")}>
-                        Back to Details
-                      </Button>
-                      <Button
-                        onClick={handleSubmit}
-                        disabled={!isDetailsValid || !areQuestionsValid || isSubmitting}
-                        className="flex items-center gap-1"
-                      >
-                        {isSubmitting ? "Updating Quiz..." : (
-                          <>
-                            <Save className="h-4 w-4" /> Update Quiz
-                          </>
-                        )}
-                      </Button>
-                    </div>
+          <TabsContent value="details" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Basic Information</CardTitle>
+                <CardDescription>Update the quiz's basic details</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title</Label>
+                  <Input
+                    id="title"
+                    value={quizTitle}
+                    onChange={(e) => setQuizTitle(e.target.value)}
+                    placeholder="Enter quiz title"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={quizDescription}
+                    onChange={(e) => setQuizDescription(e.target.value)}
+                    placeholder="Enter quiz description"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category</Label>
+                    <Input
+                      id="category"
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      placeholder="Enter category"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="difficulty">Difficulty</Label>
+                    <Select value={difficulty} onValueChange={setDifficulty}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select difficulty" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="easy">Easy</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="hard">Hard</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </main>
+                <div className="space-y-2">
+                  <Label htmlFor="timeLimit">Time Limit (minutes)</Label>
+                  <Input
+                    id="timeLimit"
+                    type="number"
+                    value={timeLimit}
+                    onChange={(e) => setTimeLimit(e.target.value)}
+                    min="1"
+                    max="120"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="questions" className="space-y-6">
+            {questions.map((question, index) => (
+              <Card key={index}>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>Question {index + 1}</CardTitle>
+                  {questions.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeQuestion(index)}
+                      className="text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Question Text</Label>
+                    <Textarea
+                      value={question.text}
+                      onChange={(e) => updateQuestionText(index, e.target.value)}
+                      placeholder="Enter question text"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Options</Label>
+                    {question.options.map((option) => (
+                      <div key={option.id} className="flex items-center gap-2">
+                        <RadioGroup
+                          value={question.correct_answer}
+                          onValueChange={(value) => updateCorrectAnswer(index, value)}
+                          className="flex items-center"
+                        >
+                          <RadioGroupItem value={option.id} id={option.id} />
+                        </RadioGroup>
+                        <Input
+                          value={option.text}
+                          onChange={(e) => updateOptionText(index, option.id, e.target.value)}
+                          placeholder={`Option ${option.id.toUpperCase()}`}
+                          className="flex-1"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Points</Label>
+                    <Input
+                      type="number"
+                      value={question.points}
+                      onChange={(e) => updateQuestionPoints(index, parseInt(e.target.value))}
+                      min="1"
+                      max="100"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            <Button onClick={addQuestion} className="w-full">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Question
+            </Button>
+          </TabsContent>
+        </Tabs>
+
+        <div className="mt-6 flex justify-end">
+          <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Save className="mr-2 h-4 w-4" />
+            {isSubmitting ? "Saving..." : "Save Changes"}
+          </Button>
+        </div>
       </div>
-    </ProtectedRoute>
+    </AdminLayout>
   );
 } 
